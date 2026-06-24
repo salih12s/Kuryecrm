@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+// Production uses the same Railway domain for the SPA and API. Local .env
+// files can still override this with http://localhost:3000/api.
+const baseURL = import.meta.env.VITE_API_URL || `${window.location.origin}/api`;
 
 export const api = axios.create({
   baseURL,
