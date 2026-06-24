@@ -1,0 +1,268 @@
+// KuryeCrm - Prisma schema (Phase 1)
+// Only the core auth/user/panel models are defined here.
+// Operational models (shifts, advances, current accounts, income/expense,
+// reporting) belong to later phases and are intentionally omitted.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  RESTAURANT
+  COURIER
+}
+
+enum ShiftStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum ShiftConfirmationStatus {
+  WAITING
+  RESTAURANT_SUBMITTED
+  COURIER_SUBMITTED
+  MATCHED
+  DISPUTED
+  ADMIN_APPROVED
+}
+
+enum AdvanceStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum FinanceTransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum FinanceTransactionStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  CANCELLED
+}
+
+enum PaymentStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum CourierPaymentStatus {
+  ACTIVE
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // One-to-one relations to role-specific profiles.
+  restaurant Restaurant?
+  courier    Courier?
+
+  @@map("users")
+}
+
+model Restaurant {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  name            String
+  authorizedPerson String
+  phone           String
+  address         String
+  hourlyRate      Decimal  @default(0) @db.Decimal(10, 2)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shifts   Shift[]
+  invoices RestaurantInvoice[]
+  payments RestaurantPayment[]
+
+  @@map("restaurants")
+}
+
+model Courier {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  name       String
+  phone      String
+  hourlyRate Decimal  @default(0) @db.Decimal(10, 2)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shifts   Shift[]
+  advances CourierAdvance[]
+  payments CourierPayment[]
+
+  @@map("couriers")
+}
+
+model Shift {
+  id           String @id @default(uuid())
+  restaurantId String
+  courierId    String
+
+  // Stored as plain strings to stay timezone-agnostic and match the
+  // frontend formats directly: date = "YYYY-MM-DD", times = "HH:mm".
+  date             String
+  plannedStartTime String
+  plannedEndTime   String
+  extraStartTime   String?
+  extraEndTime     String?
+
+  // Hourly-rate snapshots taken at creation time. Later profile rate changes
+  // must NOT alter the accounting of past shifts (used in Phase 4/5).
+  restaurantHourlyRateSnapshot Decimal @db.Decimal(10, 2)
+  courierHourlyRateSnapshot    Decimal @db.Decimal(10, 2)
+
+  // What each party reported.
+  restaurantReportedStartTime String?
+  restaurantReportedEndTime   String?
+  courierReportedStartTime    String?
+  courierReportedEndTime      String?
+
+  // Final times the admin approves; all real money math uses these.
+  approvedStartTime String?
+  approvedEndTime   String?
+
+  status             ShiftStatus             @default(PLANNED)
+  confirmationStatus ShiftConfirmationStatus @default(WAITING)
+
+  note      String?
+  adminNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  courier    Courier    @relation(fields: [courierId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([courierId])
+  @@index([date])
+  @@map("shifts")
+}
+
+// ----------------------- Finance (Phase 4) -----------------------
+// Money amounts use Decimal(12,2). Dates are "YYYY-MM-DD" strings, consistent
+// with the Shift model, for timezone-free storage and easy range filtering.
+
+model CourierAdvance {
+  id          String        @id @default(uuid())
+  courierId   String
+  amount      Decimal       @db.Decimal(12, 2)
+  advanceDate String
+  note        String?
+  status      AdvanceStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  courier Courier @relation(fields: [courierId], references: [id], onDelete: Cascade)
+
+  @@index([courierId])
+  @@index([status])
+  @@map("courier_advances")
+}
+
+model CourierPayment {
+  id          String               @id @default(uuid())
+  courierId   String
+  amount      Decimal              @db.Decimal(12, 2)
+  paymentDate String
+  method      String?
+  note        String?
+  status      CourierPaymentStatus @default(ACTIVE)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  courier Courier @relation(fields: [courierId], references: [id], onDelete: Cascade)
+
+  @@index([courierId])
+  @@index([paymentDate])
+  @@index([status])
+  @@map("courier_payments")
+}
+
+model RestaurantInvoice {
+  id           String        @id @default(uuid())
+  restaurantId String
+  invoiceNo    String?
+  invoiceDate  String
+  periodStart  String?
+  periodEnd    String?
+  amount       Decimal       @db.Decimal(12, 2)
+  note         String?
+  status       InvoiceStatus @default(UNPAID)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  restaurant Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  payments   RestaurantPayment[]
+
+  @@index([restaurantId])
+  @@index([status])
+  @@map("restaurant_invoices")
+}
+
+model RestaurantPayment {
+  id           String        @id @default(uuid())
+  restaurantId String
+  invoiceId    String?
+  paymentDate  String
+  amount       Decimal       @db.Decimal(12, 2)
+  method       String?
+  note         String?
+  status       PaymentStatus @default(ACTIVE)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  restaurant Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  invoice    RestaurantInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@index([restaurantId])
+  @@index([invoiceId])
+  @@index([status])
+  @@map("restaurant_payments")
+}
+
+model FinanceTransaction {
+  id              String                   @id @default(uuid())
+  type            FinanceTransactionType
+  title           String
+  category        String?
+  amount          Decimal                  @db.Decimal(12, 2)
+  transactionDate String
+  note            String?
+  status          FinanceTransactionStatus @default(ACTIVE)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([type])
+  @@index([status])
+  @@map("finance_transactions")
+}
