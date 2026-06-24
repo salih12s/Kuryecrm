@@ -39,16 +39,16 @@ export const adminShiftsApi = {
     (await api.patch<Shift>(`/admin/shifts/${id}/status`, { status })).data,
   approveTime: async (id: string, payload: Record<string, unknown>) =>
     (await api.patch<Shift>(`/admin/shifts/${id}/approve-time`, clean(payload))).data,
+  switchRestaurant: async (id: string, payload: { newRestaurantId: string; switchTime: string }) =>
+    (await api.patch<Shift>(`/admin/shifts/${id}/switch-restaurant`, payload)).data,
 };
 
-// ---------------- Restaurant ----------------
+// ---------------- Restaurant (read-only) ----------------
 
 export const restaurantShiftsApi = {
   list: async (filters: Pick<ShiftFilters, 'dateFrom' | 'dateTo' | 'status'> = {}) =>
     (await api.get<PartyShift[]>('/restaurant/shifts', { params: clean(filters) })).data,
   get: async (id: string) => (await api.get<PartyShift>(`/restaurant/shifts/${id}`)).data,
-  reportTime: async (id: string, payload: Record<string, unknown>) =>
-    (await api.patch<PartyShift>(`/restaurant/shifts/${id}/report-time`, clean(payload))).data,
 };
 
 // ---------------- Courier ----------------

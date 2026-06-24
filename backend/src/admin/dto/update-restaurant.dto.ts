@@ -1,22 +1,21 @@
 import {
   IsBoolean,
-  IsEmail,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Min,
-  MinLength,
   Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TURKISH_MOBILE_PHONE_MESSAGE, TURKISH_MOBILE_PHONE_REGEX } from '../../common/phone.util';
+import { LocationFields } from './location.fields';
 
 /**
  * All fields optional for editing. Password is optional: when omitted/empty
  * the existing password is kept; when provided it is re-hashed.
  */
-export class UpdateRestaurantDto {
+export class UpdateRestaurantDto extends LocationFields {
   @IsOptional()
   @IsString()
   @IsNotEmpty({ message: 'Restoran adı boş olamaz.' })
@@ -44,13 +43,14 @@ export class UpdateRestaurantDto {
   hourlyRate?: number;
 
   @IsOptional()
-  @IsEmail({}, { message: 'Geçerli bir e-posta adresi giriniz.' })
-  email?: string;
+  @IsString()
+  @IsNotEmpty({ message: 'Kullanıcı adı boş olamaz.' })
+  username?: string;
 
   // Optional on update. Empty string is treated as "no change" in the service.
   @IsOptional()
   @IsString()
-  @MinLength(6, { message: 'Şifre en az 6 karakter olmalıdır.' })
+  @IsNotEmpty({ message: 'Şifre boş olamaz.' })
   password?: string;
 
   @IsOptional()

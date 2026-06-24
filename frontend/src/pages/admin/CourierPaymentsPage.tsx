@@ -9,10 +9,14 @@ import { accountsApi, courierPaymentsApi } from '../../lib/financeApi';
 import { formatDateTR, formatTL } from '../../lib/format';
 import type { AdminCourier, CourierAccountSummary, CourierPayment } from '../../types';
 import { extractError } from './AdvancesPage';
+import { useAuth } from '../../context/AuthContext';
+import { canEditFinance } from '../../lib/permissions';
 
 const today = () => new Date().toLocaleDateString('sv-SE');
 
 export default function CourierPaymentsPage() {
+  const { user } = useAuth();
+  const canEdit = canEditFinance(user);
   const [searchParams] = useSearchParams();
   const initialCourierId = searchParams.get('courierId') ?? '';
   const [rows, setRows] = useState<CourierPayment[]>([]);
@@ -100,10 +104,10 @@ export default function CourierPaymentsPage() {
       <Filter label="Başlangıç"><input type="date" value={filters.dateFrom} onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" /></Filter>
       <Filter label="Bitiş"><input type="date" value={filters.dateTo} onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" /></Filter>
       <Filter label="Durum"><select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="">Tümü</option><option value="ACTIVE">Aktif</option><option value="CANCELLED">İptal</option></select></Filter>
-      <button onClick={openCreate} className="ml-auto rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">+ Ödeme Yap</button>
+      {canEdit && <button onClick={openCreate} className="ml-auto rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">+ Ödeme Yap</button>}
     </div>
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-sm"><thead><tr className="bg-slate-50 text-left text-muted">{['Tarih','Kurye','Tutar','Yöntem','Not','Durum','İşlemler'].map((h) => <th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody>
-      {loading ? <tr><td colSpan={7} className="px-4 py-8 text-center text-muted">Yükleniyor...</td></tr> : rows.length === 0 ? <tr><td colSpan={7} className="px-4 py-8 text-center text-muted">Ödeme kaydı yok.</td></tr> : rows.map((payment) => <tr key={payment.id} className="border-t"><td className="px-4 py-3">{formatDateTR(payment.paymentDate)}</td><td className="px-4">{payment.courierName}</td><td className="px-4">{formatTL(payment.amount)}</td><td className="px-4">{payment.method ?? '—'}</td><td className="px-4">{payment.note ?? '—'}</td><td className="px-4"><StatusPill status={payment.status} /></td><td className="px-4"><div className="flex gap-2"><button onClick={() => openEdit(payment)} className="rounded-md border px-2.5 py-1 text-xs">Düzenle</button><button onClick={() => toggle(payment)} className={`rounded-md px-2.5 py-1 text-xs text-white ${payment.status === 'ACTIVE' ? 'bg-danger' : 'bg-success'}`}>{payment.status === 'ACTIVE' ? 'İptal Et' : 'Aktif Et'}</button><Link to={`/admin/couriers/${payment.courierId}/account`} className="rounded-md border px-2.5 py-1 text-xs">Hesap</Link></div></td></tr>)}
+      {loading ? <tr><td colSpan={7} className="px-4 py-8 text-center text-muted">Yükleniyor...</td></tr> : rows.length === 0 ? <tr><td colSpan={7} className="px-4 py-8 text-center text-muted">Ödeme kaydı yok.</td></tr> : rows.map((payment) => <tr key={payment.id} className="border-t"><td className="px-4 py-3">{formatDateTR(payment.paymentDate)}</td><td className="px-4">{payment.courierName}</td><td className="px-4">{formatTL(payment.amount)}</td><td className="px-4">{payment.method ?? '—'}</td><td className="px-4">{payment.note ?? '—'}</td><td className="px-4"><StatusPill status={payment.status} /></td><td className="px-4"><div className="flex gap-2">{canEdit && <><button onClick={() => openEdit(payment)} className="rounded-md border px-2.5 py-1 text-xs">Düzenle</button><button onClick={() => toggle(payment)} className={`rounded-md px-2.5 py-1 text-xs text-white ${payment.status === 'ACTIVE' ? 'bg-danger' : 'bg-success'}`}>{payment.status === 'ACTIVE' ? 'İptal Et' : 'Aktif Et'}</button></>}<Link to={`/admin/couriers/${payment.courierId}/account`} className="rounded-md border px-2.5 py-1 text-xs">Hesap</Link></div></td></tr>)}
     </tbody></table></div>
 
     <Modal open={open} title={editing ? 'Kurye Ödemesini Düzenle' : 'Kurye Ödemesi Yap'} onClose={() => setOpen(false)}>

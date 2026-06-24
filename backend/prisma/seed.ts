@@ -1,7 +1,7 @@
 /**
- * KuryeCrm - Local seed data (Phase 1).
- * Creates one ADMIN, one RESTAURANT and one COURIER user with profiles.
- * Safe to re-run: uses upsert keyed on email.
+ * KuryeCrm - Local seed data.
+ * Creates an ADMIN, a KURYE_SEFI, a RESTAURANT and a COURIER user with profiles.
+ * Safe to re-run: uses upsert keyed on username.
  *
  * Run with: npm run seed  (or: npx prisma db seed)
  */
@@ -12,37 +12,66 @@ const prisma = new PrismaClient();
 
 async function main() {
   const adminPassword = await bcrypt.hash('Admin12345', 10);
-  const restaurantPassword = await bcrypt.hash('Restoran12345', 10);
-  const courierPassword = await bcrypt.hash('Kurye12345', 10);
 
   // ---- ADMIN ----
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@kuryecrm.local' },
+    where: { username: 'admin' },
     update: { passwordHash: adminPassword, role: Role.ADMIN, isActive: true },
     create: {
       name: 'Sistem Yöneticisi',
-      email: 'admin@kuryecrm.local',
+      username: 'admin',
       passwordHash: adminPassword,
       role: Role.ADMIN,
       isActive: true,
     },
   });
 
-  // Useful after a clean reset: keep only the mandatory admin account so all
-  // restaurants, couriers and operational data can be created from the UI.
+  // A clean test database starts with exactly one account. Kurye Şefi,
+  // partners, restaurants and couriers are then created from the UI.
   if (process.env.ADMIN_ONLY === 'true') {
     console.log('Admin-only seed completed:');
-    console.log('  ADMIN      ->', admin.email, '/ Admin12345');
+    console.log('  ADMIN      ->', admin.username, '/ Admin12345');
     return;
   }
 
+  const sefPassword = await bcrypt.hash('Sef12345', 10);
+  const partnerPassword = await bcrypt.hash('Ortak12345', 10);
+  const restaurantPassword = await bcrypt.hash('Restoran12345', 10);
+  const courierPassword = await bcrypt.hash('Kurye12345', 10);
+
+  // ---- KURYE ŞEFİ ----
+  const sef = await prisma.user.upsert({
+    where: { username: 'sef' },
+    update: { passwordHash: sefPassword, role: Role.KURYE_SEFI, isActive: true },
+    create: {
+      name: 'Kurye Şefi',
+      username: 'sef',
+      passwordHash: sefPassword,
+      role: Role.KURYE_SEFI,
+      isActive: true,
+    },
+  });
+
+  // ---- ORTAKLAR (Partner) ----
+  const partner = await prisma.user.upsert({
+    where: { username: 'ortak' },
+    update: { passwordHash: partnerPassword, role: Role.PARTNER, isActive: true },
+    create: {
+      name: 'Ortak Kullanıcı',
+      username: 'ortak',
+      passwordHash: partnerPassword,
+      role: Role.PARTNER,
+      isActive: true,
+    },
+  });
+
   // ---- RESTAURANT ----
   const restaurantUser = await prisma.user.upsert({
-    where: { email: 'restoran@kuryecrm.local' },
+    where: { username: 'restoran' },
     update: { passwordHash: restaurantPassword, role: Role.RESTAURANT, isActive: true },
     create: {
       name: 'Örnek Restoran',
-      email: 'restoran@kuryecrm.local',
+      username: 'restoran',
       passwordHash: restaurantPassword,
       role: Role.RESTAURANT,
       isActive: true,
@@ -58,6 +87,9 @@ async function main() {
       authorizedPerson: 'Ahmet Yılmaz',
       phone: '0555 000 00 01',
       address: 'Atatürk Cad. No:1, İstanbul',
+      latitude: 41.0082,
+      longitude: 28.9784,
+      locationNote: 'Ana giriş, cadde üzeri.',
       hourlyRate: 120.0,
       isActive: true,
     },
@@ -65,11 +97,11 @@ async function main() {
 
   // ---- COURIER ----
   const courierUser = await prisma.user.upsert({
-    where: { email: 'kurye@kuryecrm.local' },
+    where: { username: 'kurye' },
     update: { passwordHash: courierPassword, role: Role.COURIER, isActive: true },
     create: {
       name: 'Örnek Kurye',
-      email: 'kurye@kuryecrm.local',
+      username: 'kurye',
       passwordHash: courierPassword,
       role: Role.COURIER,
       isActive: true,
@@ -83,12 +115,13 @@ async function main() {
       userId: courierUser.id,
       name: 'Mehmet Demir',
       phone: '0555 000 00 02',
+      plate: '34 KRY 100',
       hourlyRate: 90.0,
       isActive: true,
     },
   });
 
-  // ---- Example SHIFT (Phase 3) ----
+  // ---- Example SHIFT ----
   // A planned shift for tomorrow between the seed restaurant and courier.
   const seedRestaurant = await prisma.restaurant.findUnique({
     where: { userId: restaurantUser.id },
@@ -124,9 +157,11 @@ async function main() {
   }
 
   console.log('Seed completed:');
-  console.log('  ADMIN      ->', admin.email, '/ Admin12345');
-  console.log('  RESTAURANT ->', restaurantUser.email, '/ Restoran12345');
-  console.log('  COURIER    ->', courierUser.email, '/ Kurye12345');
+  console.log('  ADMIN      ->', admin.username, '/ Admin12345');
+  console.log('  KURYE ŞEFİ ->', sef.username, '/ Sef12345');
+  console.log('  ORTAK      ->', partner.username, '/ Ortak12345');
+  console.log('  RESTAURANT ->', restaurantUser.username, '/ Restoran12345');
+  console.log('  COURIER    ->', courierUser.username, '/ Kurye12345');
 }
 
 main()

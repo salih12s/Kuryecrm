@@ -9,6 +9,32 @@
   .shadow-sm { box-shadow: none !important; }
 }
 
+/* Name labels shown permanently above markers on the live map.
+   Restaurants are red, couriers are blue. */
+.leaflet-tooltip.restaurant-label,
+.leaflet-tooltip.courier-label {
+  color: #fff;
+  border: none;
+  border-radius: 9999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+  white-space: nowrap;
+}
+.leaflet-tooltip.restaurant-label {
+  background: #dc2626;
+}
+.leaflet-tooltip.restaurant-label::before {
+  border-top-color: #dc2626;
+}
+.leaflet-tooltip.courier-label {
+  background: #2563eb;
+}
+.leaflet-tooltip.courier-label::before {
+  border-top-color: #2563eb;
+}
+
 html,
 body,
 #root {

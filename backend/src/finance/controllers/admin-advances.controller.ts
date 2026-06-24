@@ -3,6 +3,7 @@ import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
+import { FinanceWriteGuard } from '../guards/finance-write.guard';
 import { AdvancesService } from '../advances.service';
 import {
   CreateAdvanceDto,
@@ -12,8 +13,8 @@ import {
 } from '../dto/advance.dto';
 
 @Controller('admin/advances')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@UseGuards(JwtAuthGuard, RolesGuard, FinanceWriteGuard)
+@Roles(Role.ADMIN, Role.PARTNER)
 export class AdminAdvancesController {
   constructor(private readonly service: AdvancesService) {}
 

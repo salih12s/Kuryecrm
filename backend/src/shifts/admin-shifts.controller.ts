@@ -8,11 +8,13 @@ import { CreateShiftDto } from './dto/create-shift.dto';
 import { UpdateShiftDto } from './dto/update-shift.dto';
 import { UpdateShiftStatusDto } from './dto/update-shift-status.dto';
 import { ApproveTimeDto } from './dto/approve-time.dto';
+import { SwitchRestaurantDto } from './dto/switch-restaurant.dto';
 import { ShiftQueryDto } from './dto/shift-query.dto';
 
+// Operational shift management is available to admins and Kurye Şefi.
 @Controller('admin/shifts')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@Roles(Role.ADMIN, Role.KURYE_SEFI)
 export class AdminShiftsController {
   constructor(private readonly shifts: ShiftsService) {}
 
@@ -44,5 +46,10 @@ export class AdminShiftsController {
   @Patch(':id/approve-time')
   approveTime(@Param('id') id: string, @Body() dto: ApproveTimeDto) {
     return this.shifts.adminApproveTime(id, dto);
+  }
+
+  @Patch(':id/switch-restaurant')
+  switchRestaurant(@Param('id') id: string, @Body() dto: SwitchRestaurantDto) {
+    return this.shifts.adminSwitchRestaurant(id, dto);
   }
 }

@@ -3,6 +3,7 @@ import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
+import { FinanceWriteGuard } from '../guards/finance-write.guard';
 import { PaymentsService } from '../payments.service';
 import {
   CreatePaymentDto,
@@ -12,8 +13,8 @@ import {
 } from '../dto/payment.dto';
 
 @Controller('admin/restaurant-payments')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@UseGuards(JwtAuthGuard, RolesGuard, FinanceWriteGuard)
+@Roles(Role.ADMIN, Role.PARTNER)
 export class AdminPaymentsController {
   constructor(private readonly service: PaymentsService) {}
 

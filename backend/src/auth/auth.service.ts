@@ -1,7 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 import { LoginDto } from './dto/login.dto';
 import { AuthUser } from './decorators/current-user.decorator';
 
@@ -10,16 +12,17 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly settings: SettingsService,
   ) {}
 
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({
-      where: { email: dto.email.toLowerCase().trim() },
+      where: { username: dto.username.toLowerCase().trim() },
     });
 
-    // Generic message on purpose: do not reveal whether the email exists.
+    // Generic message on purpose: do not reveal whether the username exists.
     if (!user) {
-      throw new UnauthorizedException('E-posta veya şifre hatalı.');
+      throw new UnauthorizedException('Kullanıcı adı veya şifre hatalı.');
     }
 
     if (!user.isActive) {
@@ -28,19 +31,27 @@ export class AuthService {
 
     const passwordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!passwordValid) {
-      throw new UnauthorizedException('E-posta veya şifre hatalı.');
+      throw new UnauthorizedException('Kullanıcı adı veya şifre hatalı.');
     }
 
-    const payload = { sub: user.id, email: user.email, role: user.role };
+    const payload = { sub: user.id, username: user.username, role: user.role };
     const accessToken = await this.jwt.signAsync(payload);
+
+    const financeEditable =
+      user.role === Role.ADMIN
+        ? true
+        : user.role === Role.PARTNER
+          ? await this.settings.getBool('partners_can_edit_finance')
+          : false;
 
     return {
       accessToken,
       user: {
         id: user.id,
         name: user.name,
-        email: user.email,
+        username: user.username,
         role: user.role,
+        financeEditable,
       },
     };
   }
@@ -62,12 +73,22 @@ export class AuthService {
       throw new UnauthorizedException('Kullanıcı bulunamadı.');
     }
 
+    // Admins always edit finance; partners only when the setting is enabled.
+    // Non-finance roles get false (they don't see finance screens anyway).
+    const financeEditable =
+      user.role === Role.ADMIN
+        ? true
+        : user.role === Role.PARTNER
+          ? await this.settings.getBool('partners_can_edit_finance')
+          : false;
+
     return {
       id: user.id,
       name: user.name,
-      email: user.email,
+      username: user.username,
       role: user.role,
       isActive: user.isActive,
+      financeEditable,
       restaurant: user.restaurant ?? null,
       courier: user.courier ?? null,
     };

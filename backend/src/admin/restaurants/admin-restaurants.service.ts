@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, Role } from '@prisma/client';
+import { ApprovalStatus, Prisma, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateRestaurantDto } from '../dto/create-restaurant.dto';
@@ -21,9 +21,14 @@ export class AdminRestaurantsService {
     address: string;
     hourlyRate: Prisma.Decimal;
     isActive: boolean;
+    approvalStatus: ApprovalStatus;
+    rejectionNote: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    locationNote: string | null;
     createdAt: Date;
     updatedAt: Date;
-    user: { id: string; email: string; isActive: boolean };
+    user: { id: string; username: string; isActive: boolean };
   }) {
     return {
       id: restaurant.id,
@@ -33,7 +38,12 @@ export class AdminRestaurantsService {
       address: restaurant.address,
       hourlyRate: restaurant.hourlyRate.toString(),
       isActive: restaurant.isActive,
-      email: restaurant.user.email,
+      approvalStatus: restaurant.approvalStatus,
+      rejectionNote: restaurant.rejectionNote,
+      latitude: restaurant.latitude,
+      longitude: restaurant.longitude,
+      locationNote: restaurant.locationNote,
+      username: restaurant.user.username,
       userId: restaurant.user.id,
       createdAt: restaurant.createdAt,
       updatedAt: restaurant.updatedAt,
@@ -41,6 +51,10 @@ export class AdminRestaurantsService {
   }
 
   async findAll(query: ListQueryDto) {
+    // All records show in the list (including pending ones, flagged with their
+    // approval status in the UI) so the creator can still see what they added.
+    // The optional active/passive filter is still used by other screens (e.g.
+    // shift dropdowns request only active = approved & enabled records).
     const where: Prisma.RestaurantWhereInput = {};
 
     if (query.status === 'active') where.isActive = true;
@@ -52,13 +66,13 @@ export class AdminRestaurantsService {
         { name: { contains: term, mode: 'insensitive' } },
         { authorizedPerson: { contains: term, mode: 'insensitive' } },
         { phone: { contains: term, mode: 'insensitive' } },
-        { user: { email: { contains: term, mode: 'insensitive' } } },
+        { user: { username: { contains: term, mode: 'insensitive' } } },
       ];
     }
 
     const restaurants = await this.prisma.restaurant.findMany({
       where,
-      include: { user: { select: { id: true, email: true, isActive: true } } },
+      include: { user: { select: { id: true, username: true, isActive: true } } },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -68,7 +82,7 @@ export class AdminRestaurantsService {
   async findOne(id: string) {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { id },
-      include: { user: { select: { id: true, email: true, isActive: true } } },
+      include: { user: { select: { id: true, username: true, isActive: true } } },
     });
 
     if (!restaurant) {
@@ -79,18 +93,23 @@ export class AdminRestaurantsService {
   }
 
   async create(dto: CreateRestaurantDto) {
-    const email = dto.email.toLowerCase().trim();
-    await this.assertEmailAvailable(email);
+    const username = dto.username.toLowerCase().trim();
+    await this.assertUsernameAvailable(username);
 
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
-    const isActive = dto.isActive ?? true;
+
+    // Every new record - whoever creates it - lands in the admin approval
+    // queue. It stays inactive (cannot log in, cannot be assigned to shifts)
+    // and only appears in the restaurants list once an admin approves it.
+    const approvalStatus = ApprovalStatus.PENDING;
+    const isActive = false;
 
     try {
       // User + Restaurant are created atomically via a nested write.
       const user = await this.prisma.user.create({
         data: {
           name: dto.name,
-          email,
+          username,
           passwordHash,
           role: Role.RESTAURANT,
           isActive,
@@ -100,12 +119,16 @@ export class AdminRestaurantsService {
               authorizedPerson: dto.authorizedPerson,
               phone: dto.phone,
               address: dto.address ?? '',
+              latitude: dto.latitude ?? null,
+              longitude: dto.longitude ?? null,
+              locationNote: dto.locationNote ?? null,
               hourlyRate: new Prisma.Decimal(dto.hourlyRate),
               isActive,
+              approvalStatus,
             },
           },
         },
-        include: { restaurant: { include: { user: { select: { id: true, email: true, isActive: true } } } } },
+        include: { restaurant: { include: { user: { select: { id: true, username: true, isActive: true } } } } },
       });
 
       return this.serialize(user.restaurant!);
@@ -114,7 +137,7 @@ export class AdminRestaurantsService {
     }
   }
 
-  async update(id: string, dto: UpdateRestaurantDto) {
+  async update(id: string, dto: UpdateRestaurantDto, updaterRole: Role) {
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { id },
       include: { user: true },
@@ -123,13 +146,17 @@ export class AdminRestaurantsService {
       throw new NotFoundException('Restoran bulunamadı.');
     }
 
-    // Email change requires a uniqueness check against other users.
+    // Only admins control active status; ignore it for Kurye Şefi so they
+    // cannot bypass approval by activating a record through an edit.
+    if (updaterRole !== Role.ADMIN) dto.isActive = undefined;
+
+    // Username change requires a uniqueness check against other users.
     const userData: Prisma.UserUpdateInput = {};
-    if (dto.email) {
-      const email = dto.email.toLowerCase().trim();
-      if (email !== restaurant.user.email) {
-        await this.assertEmailAvailable(email, restaurant.userId);
-        userData.email = email;
+    if (dto.username) {
+      const username = dto.username.toLowerCase().trim();
+      if (username !== restaurant.user.username) {
+        await this.assertUsernameAvailable(username, restaurant.userId);
+        userData.username = username;
       }
     }
     if (dto.name) userData.name = dto.name;
@@ -147,6 +174,9 @@ export class AdminRestaurantsService {
     if (dto.hourlyRate !== undefined) {
       restaurantData.hourlyRate = new Prisma.Decimal(dto.hourlyRate);
     }
+    if (dto.latitude !== undefined) restaurantData.latitude = dto.latitude;
+    if (dto.longitude !== undefined) restaurantData.longitude = dto.longitude;
+    if (dto.locationNote !== undefined) restaurantData.locationNote = dto.locationNote || null;
     if (dto.isActive !== undefined) restaurantData.isActive = dto.isActive;
 
     try {
@@ -157,7 +187,7 @@ export class AdminRestaurantsService {
         return tx.restaurant.update({
           where: { id },
           data: restaurantData,
-          include: { user: { select: { id: true, email: true, isActive: true } } },
+          include: { user: { select: { id: true, username: true, isActive: true } } },
         });
       });
       return this.serialize(updated);
@@ -167,37 +197,29 @@ export class AdminRestaurantsService {
   }
 
   /**
-   * Soft enable/disable. Keeps Restaurant.isActive and the linked
-   * User.isActive in sync so a passive restaurant cannot log in.
+   * Permanently deletes a restaurant and its linked login user. Deleting the
+   * user cascades (schema onDelete: Cascade) to the restaurant and all of its
+   * shifts, segments, invoices, payments and locations.
    */
-  async setStatus(id: string, isActive: boolean) {
+  async remove(id: string) {
     const restaurant = await this.prisma.restaurant.findUnique({ where: { id } });
     if (!restaurant) {
       throw new NotFoundException('Restoran bulunamadı.');
     }
-
-    const updated = await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: restaurant.userId }, data: { isActive } });
-      return tx.restaurant.update({
-        where: { id },
-        data: { isActive },
-        include: { user: { select: { id: true, email: true, isActive: true } } },
-      });
-    });
-
-    return this.serialize(updated);
+    await this.prisma.user.delete({ where: { id: restaurant.userId } });
+    return { id };
   }
 
-  private async assertEmailAvailable(email: string, ignoreUserId?: string) {
-    const existing = await this.prisma.user.findUnique({ where: { email } });
+  private async assertUsernameAvailable(username: string, ignoreUserId?: string) {
+    const existing = await this.prisma.user.findUnique({ where: { username } });
     if (existing && existing.id !== ignoreUserId) {
-      throw new ConflictException('Bu e-posta adresi zaten kullanılıyor.');
+      throw new ConflictException('Bu kullanıcı adı zaten kullanılıyor.');
     }
   }
 
   private handlePrismaError(e: unknown): never {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-      throw new ConflictException('Bu e-posta adresi zaten kullanılıyor.');
+      throw new ConflictException('Bu kullanıcı adı zaten kullanılıyor.');
     }
     throw e;
   }

@@ -3,37 +3,38 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import AdminLayout from '../../components/admin/AdminLayout';
 import ListToolbar from '../../components/admin/ListToolbar';
-import StatusBadge from '../../components/admin/StatusBadge';
 import Field from '../../components/admin/Field';
 import Modal from '../../components/Modal';
 import { couriersApi } from '../../lib/adminApi';
 import { formatTL } from '../../lib/format';
-import type { AdminCourier, StatusFilter } from '../../types';
+import type { AdminCourier } from '../../types';
 import PhoneField from '../../components/admin/PhoneField';
+import { useAuth } from '../../context/AuthContext';
 
 interface FormState {
   name: string;
   phone: string;
+  plate: string;
   hourlyRate: string;
-  email: string;
+  username: string;
   password: string;
-  isActive: boolean;
 }
 
 const emptyForm: FormState = {
   name: '',
   phone: '',
+  plate: '',
   hourlyRate: '',
-  email: '',
+  username: '',
   password: '',
-  isActive: true,
 };
 
 export default function CouriersPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [rows, setRows] = useState<AdminCourier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<StatusFilter>('all');
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AdminCourier | null>(null);
@@ -44,7 +45,7 @@ export default function CouriersPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const data = await couriersApi.list({ search, status });
+      const data = await couriersApi.list({ search });
       setRows(data);
     } catch {
       setRows([]);
@@ -57,7 +58,7 @@ export default function CouriersPage() {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, status]);
+  }, [search]);
 
   const openCreate = () => {
     setEditing(null);
@@ -71,10 +72,10 @@ export default function CouriersPage() {
     setForm({
       name: c.name,
       phone: c.phone,
+      plate: c.plate ?? '',
       hourlyRate: c.hourlyRate,
-      email: c.email,
+      username: c.username,
       password: '',
-      isActive: c.isActive,
     });
     setFormError(null);
     setModalOpen(true);
@@ -88,10 +89,10 @@ export default function CouriersPage() {
       const payload = {
         name: form.name,
         phone: form.phone,
+        plate: form.plate,
         hourlyRate: Number(form.hourlyRate),
-        email: form.email,
+        username: form.username,
         password: form.password,
-        isActive: form.isActive,
       };
       if (editing) {
         await couriersApi.update(editing.id, payload);
@@ -107,9 +108,12 @@ export default function CouriersPage() {
     }
   };
 
-  const toggleStatus = async (c: AdminCourier) => {
+  const remove = async (c: AdminCourier) => {
+    if (!window.confirm(`"${c.name}" kuryesini ve tüm geçmişini (vardiya, avans, ödeme) kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) {
+      return;
+    }
     try {
-      await couriersApi.setStatus(c.id, !c.isActive);
+      await couriersApi.remove(c.id);
       await load();
     } catch (err) {
       alert(extractError(err));
@@ -126,11 +130,9 @@ export default function CouriersPage() {
       <ListToolbar
         search={search}
         onSearch={setSearch}
-        status={status}
-        onStatus={setStatus}
         onAdd={openCreate}
         addLabel="Yeni Kurye Ekle"
-        searchPlaceholder="Kurye, telefon, e-posta ara..."
+        searchPlaceholder="Kurye, telefon, plaka, kullanıcı adı ara..."
       />
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm">
@@ -139,7 +141,9 @@ export default function CouriersPage() {
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-muted">
                 <th className="px-4 py-3 font-medium">Kurye Adı</th>
+                <th className="px-4 py-3 font-medium">Kullanıcı Adı</th>
                 <th className="px-4 py-3 font-medium">Telefon</th>
+                <th className="px-4 py-3 font-medium">Plaka</th>
                 <th className="px-4 py-3 font-medium">Saatlik Ücret</th>
                 <th className="px-4 py-3 font-medium">Durum</th>
                 <th className="px-4 py-3 text-right font-medium">İşlemler</th>
@@ -148,13 +152,13 @@ export default function CouriersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted">
+                  <td colSpan={7} className="px-4 py-8 text-center text-muted">
                     Yükleniyor...
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted">
+                  <td colSpan={7} className="px-4 py-8 text-center text-muted">
                     Kayıt bulunamadı.
                   </td>
                 </tr>
@@ -162,10 +166,24 @@ export default function CouriersPage() {
                 rows.map((c) => (
                   <tr key={c.id} className="border-b border-slate-100 last:border-0">
                     <td className="px-4 py-3 font-medium text-text">{c.name}</td>
+                    <td className="px-4 py-3 text-muted">{c.username}</td>
                     <td className="px-4 py-3 text-muted">{c.phone}</td>
+                    <td className="px-4 py-3 text-muted">{c.plate || '—'}</td>
                     <td className="px-4 py-3 text-text">{formatTL(c.hourlyRate)}</td>
                     <td className="px-4 py-3">
-                      <StatusBadge active={c.isActive} />
+                      {c.approvalStatus === 'PENDING' ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                          Onay Bekliyor
+                        </span>
+                      ) : c.approvalStatus === 'REJECTED' ? (
+                        <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-medium text-danger">
+                          Reddedildi
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
+                          Onaylı
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
@@ -187,16 +205,14 @@ export default function CouriersPage() {
                         >
                           Düzenle
                         </button>
-                        <button
-                          onClick={() => toggleStatus(c)}
-                          className={`rounded-lg px-3 py-1.5 text-xs font-medium text-white ${
-                            c.isActive
-                              ? 'bg-danger hover:bg-danger/90'
-                              : 'bg-success hover:bg-success/90'
-                          }`}
-                        >
-                          {c.isActive ? 'Pasife Al' : 'Aktif Et'}
-                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => remove(c)}
+                            className="rounded-lg border border-danger/40 px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10"
+                          >
+                            Sil
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -231,6 +247,12 @@ export default function CouriersPage() {
               onValueChange={(phone) => setForm({ ...form, phone })}
             />
             <Field
+              label="Motor Plakası"
+              value={form.plate}
+              onChange={(e) => setForm({ ...form, plate: e.target.value })}
+              hint="Opsiyonel. Örn. 34 KRY 100"
+            />
+            <Field
               label="Saatlik Ücret (₺)"
               type="number"
               min="0"
@@ -240,11 +262,11 @@ export default function CouriersPage() {
               onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })}
             />
             <Field
-              label="E-posta"
-              type="email"
+              label="Kullanıcı Adı"
               required
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              hint="Girişte kullanılır. Harf, rakam, . _ -"
             />
           </div>
           <Field
@@ -253,17 +275,11 @@ export default function CouriersPage() {
             required={!editing}
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
-            hint={editing ? 'Boş bırakılırsa şifre değişmez.' : 'En az 6 karakter.'}
+              hint={editing ? 'Boş bırakılırsa şifre değişmez.' : undefined}
           />
-          <label className="flex items-center gap-2 text-sm text-text">
-            <input
-              type="checkbox"
-              checked={form.isActive}
-              onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-              className="h-4 w-4 rounded border-slate-300 text-accent focus:ring-accent"
-            />
-            Aktif
-          </label>
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Yeni kayıtlar admin onayından sonra listede görünür ve giriş yapabilir.
+          </p>
 
           <div className="flex justify-end gap-2 pt-2">
             <button

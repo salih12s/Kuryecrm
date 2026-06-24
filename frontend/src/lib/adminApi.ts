@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { AdminCourier, AdminRestaurant, StatusFilter } from '../types';
+import type { AdminCourier, AdminRestaurant, AdminUser, AppSettings, PendingApprovals, Role, StatusFilter } from '../types';
 
 interface ListParams {
   search?: string;
@@ -31,9 +31,8 @@ export const restaurantsApi = {
     const res = await api.patch<AdminRestaurant>(`/admin/restaurants/${id}`, clean(payload));
     return res.data;
   },
-  setStatus: async (id: string, isActive: boolean) => {
-    const res = await api.patch<AdminRestaurant>(`/admin/restaurants/${id}/status`, { isActive });
-    return res.data;
+  remove: async (id: string) => {
+    await api.delete(`/admin/restaurants/${id}`);
   },
 };
 
@@ -52,8 +51,42 @@ export const couriersApi = {
     const res = await api.patch<AdminCourier>(`/admin/couriers/${id}`, clean(payload));
     return res.data;
   },
-  setStatus: async (id: string, isActive: boolean) => {
-    const res = await api.patch<AdminCourier>(`/admin/couriers/${id}/status`, { isActive });
+  remove: async (id: string) => {
+    await api.delete(`/admin/couriers/${id}`);
+  },
+};
+
+// ---------------- Pending approvals (admin only) ----------------
+
+export const approvalsApi = {
+  list: async () => {
+    const res = await api.get<PendingApprovals>('/admin/approvals');
     return res.data;
   },
+  decideCourier: async (id: string, action: 'approve' | 'reject', note?: string) => {
+    const res = await api.patch(`/admin/approvals/couriers/${id}`, { action, note });
+    return res.data;
+  },
+  decideRestaurant: async (id: string, action: 'approve' | 'reject', note?: string) => {
+    const res = await api.patch(`/admin/approvals/restaurants/${id}`, { action, note });
+    return res.data;
+  },
+};
+
+// ---------------- App settings (admin only) ----------------
+
+export const settingsApi = {
+  get: async () => (await api.get<AppSettings>('/admin/settings')).data,
+  update: async (payload: Partial<Record<keyof AppSettings, string | number>>) =>
+    (await api.patch<AppSettings>('/admin/settings', payload)).data,
+};
+
+// ---------------- Users & role permissions (admin only) ----------------
+
+export const usersApi = {
+  list: async () => (await api.get<AdminUser[]>('/admin/users')).data,
+  create: async (payload: { name: string; username: string; password: string; role: Role; isActive: boolean }) =>
+    (await api.post<AdminUser>('/admin/users', payload)).data,
+  update: async (id: string, payload: Partial<{ name: string; username: string; password: string; role: Role; isActive: boolean }>) =>
+    (await api.patch<AdminUser>(`/admin/users/${id}`, clean(payload))).data,
 };

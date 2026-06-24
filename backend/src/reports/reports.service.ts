@@ -11,7 +11,8 @@ import {
   ShiftStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { durationHours, round2 } from '../common/time.util';
+import { durationHours, lateMinutes, round2, splitNormalOvertime } from '../common/time.util';
+import { restaurantRevenueBreakdown, shiftServiceAmount } from '../common/shift-calc.util';
 
 const APPROVED = {
   status: ShiftStatus.COMPLETED,
@@ -20,18 +21,31 @@ const APPROVED = {
   approvedEndTime: { not: null },
 } satisfies Prisma.ShiftWhereInput;
 
-type ReportShift = Prisma.ShiftGetPayload<{
-  include: { restaurant: { select: { id: true; name: true } }; courier: { select: { id: true; name: true } } };
-}>;
+const reportShiftInclude = {
+  restaurant: { select: { id: true, name: true } },
+  courier: { select: { id: true, name: true } },
+  segments: { include: { restaurant: { select: { id: true, name: true } } }, orderBy: { sequence: 'asc' } },
+} satisfies Prisma.ShiftInclude;
+
+type ReportShift = Prisma.ShiftGetPayload<{ include: typeof reportShiftInclude }>;
 
 @Injectable()
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
   private shiftItem(shift: ReportShift) {
-    const workHours = durationHours(shift.approvedStartTime as string, shift.approvedEndTime as string);
-    const restaurantServiceAmount = workHours * Number(shift.restaurantHourlyRateSnapshot);
+    const start = shift.approvedStartTime as string;
+    const end = shift.approvedEndTime as string;
+    // Courier hours/earning span the whole shift (the courier worked it all),
+    // regardless of how many restaurants it was split across.
+    const workHours = durationHours(start, end);
+    const restaurantServiceAmount = shiftServiceAmount(shift);
     const courierEarning = workHours * Number(shift.courierHourlyRateSnapshot);
+    // Lateness reflects when the courier actually started (their own reported
+    // time). Approving a clean start time for payment must not erase the fact
+    // that the courier reported starting late.
+    const late = lateMinutes(shift.plannedStartTime, shift.courierReportedStartTime ?? start);
+    const split = splitNormalOvertime(shift.plannedEndTime, start, end);
     return {
       id: shift.id,
       date: shift.date,
@@ -39,12 +53,24 @@ export class ReportsService {
       restaurantName: shift.restaurant.name,
       courierId: shift.courierId,
       courierName: shift.courier.name,
-      approvedStartTime: shift.approvedStartTime as string,
-      approvedEndTime: shift.approvedEndTime as string,
+      plannedStartTime: shift.plannedStartTime,
+      plannedEndTime: shift.plannedEndTime,
+      approvedStartTime: start,
+      approvedEndTime: end,
+      actualStartTime: start,
+      actualEndTime: end,
+      lateMinutes: late,
+      isLate: late > 0,
+      normalHours: split.normalHours,
+      overtimeHours: split.overtimeHours,
+      totalWorkHours: split.totalHours,
       workHours: round2(workHours),
-      restaurantServiceAmount: round2(restaurantServiceAmount),
+      restaurantServiceAmount,
       courierEarning: round2(courierEarning),
       grossDifference: round2(restaurantServiceAmount - courierEarning),
+      // Per-restaurant split (multiple entries only when the courier switched
+      // restaurants mid-shift).
+      restaurants: restaurantRevenueBreakdown(shift),
     };
   }
 
@@ -80,10 +106,7 @@ export class ReportsService {
     const [shiftRows, movement] = await Promise.all([
       this.prisma.shift.findMany({
         where: { ...APPROVED, date: { gte: startDate, lte: endDate } },
-        include: {
-          restaurant: { select: { id: true, name: true } },
-          courier: { select: { id: true, name: true } },
-        },
+        include: reportShiftInclude,
         orderBy: [{ date: 'asc' }, { approvedStartTime: 'asc' }],
       }),
       this.movements(startDate, endDate),
@@ -146,14 +169,35 @@ export class ReportsService {
   private groupShifts(shifts: ReturnType<ReportsService['shiftItem']>[], key: 'restaurant' | 'courier') {
     const map = new Map<string, { id: string; name: string; shiftCount: number; workHours: number; amount: number }>();
     for (const shift of shifts) {
-      const id = key === 'restaurant' ? shift.restaurantId : shift.courierId;
-      const name = key === 'restaurant' ? shift.restaurantName : shift.courierName;
-      const amount = key === 'restaurant' ? shift.restaurantServiceAmount : shift.courierEarning;
-      const current = map.get(id) ?? { id, name, shiftCount: 0, workHours: 0, amount: 0 };
+      if (key === 'restaurant') {
+        // Segment-aware: a shift split across restaurants contributes to each
+        // restaurant it touched, using that restaurant's own hours and amount.
+        for (const r of shift.restaurants) {
+          const current = map.get(r.restaurantId) ?? {
+            id: r.restaurantId,
+            name: r.restaurantName ?? shift.restaurantName,
+            shiftCount: 0,
+            workHours: 0,
+            amount: 0,
+          };
+          current.shiftCount += 1;
+          current.workHours += r.hours;
+          current.amount += r.amount;
+          map.set(r.restaurantId, current);
+        }
+        continue;
+      }
+      const current = map.get(shift.courierId) ?? {
+        id: shift.courierId,
+        name: shift.courierName,
+        shiftCount: 0,
+        workHours: 0,
+        amount: 0,
+      };
       current.shiftCount += 1;
       current.workHours += shift.workHours;
-      current.amount += amount;
-      map.set(id, current);
+      current.amount += shift.courierEarning;
+      map.set(shift.courierId, current);
     }
     return [...map.values()].map((item) => ({ ...item, workHours: round2(item.workHours), amount: round2(item.amount) }));
   }
@@ -214,23 +258,43 @@ export class ReportsService {
   }
 
   async restaurantReport(startDate: string, endDate: string) {
-    const restaurants = await this.prisma.restaurant.findMany({
-      orderBy: { name: 'asc' },
-      include: {
-        shifts: { where: { ...APPROVED, date: { gte: startDate, lte: endDate } } },
-        invoices: { where: { invoiceDate: { gte: startDate, lte: endDate }, status: { not: InvoiceStatus.CANCELLED } } },
-        payments: { where: { paymentDate: { gte: startDate, lte: endDate }, status: PaymentStatus.ACTIVE }, orderBy: { paymentDate: 'desc' } },
-      },
-    });
+    const [restaurants, shifts] = await Promise.all([
+      this.prisma.restaurant.findMany({
+        orderBy: { name: 'asc' },
+        include: {
+          invoices: { where: { invoiceDate: { gte: startDate, lte: endDate }, status: { not: InvoiceStatus.CANCELLED } } },
+          payments: { where: { paymentDate: { gte: startDate, lte: endDate }, status: PaymentStatus.ACTIVE }, orderBy: { paymentDate: 'desc' } },
+        },
+      }),
+      this.prisma.shift.findMany({
+        where: { ...APPROVED, date: { gte: startDate, lte: endDate } },
+        include: reportShiftInclude,
+      }),
+    ]);
+
+    // Segment-aware work hours / service amount per restaurant.
+    const byRestaurant = new Map<string, { hours: number; amount: number; shiftCount: number }>();
+    for (const shift of shifts) {
+      for (const r of restaurantRevenueBreakdown(shift)) {
+        const current = byRestaurant.get(r.restaurantId) ?? { hours: 0, amount: 0, shiftCount: 0 };
+        current.hours += r.hours;
+        current.amount += r.amount;
+        current.shiftCount += 1;
+        byRestaurant.set(r.restaurantId, current);
+      }
+    }
+
     return restaurants.map((restaurant) => {
-      const workHours = restaurant.shifts.reduce((sum, shift) => sum + durationHours(shift.approvedStartTime!, shift.approvedEndTime!), 0);
-      const serviceAmount = restaurant.shifts.reduce((sum, shift) => sum + durationHours(shift.approvedStartTime!, shift.approvedEndTime!) * Number(shift.restaurantHourlyRateSnapshot), 0);
+      const work = byRestaurant.get(restaurant.id) ?? { hours: 0, amount: 0, shiftCount: 0 };
       const invoiced = restaurant.invoices.reduce((sum, item) => sum + Number(item.amount), 0);
       const paid = restaurant.payments.reduce((sum, item) => sum + Number(item.amount), 0);
       return {
         restaurantId: restaurant.id, restaurantName: restaurant.name, isActive: restaurant.isActive,
-        shiftCount: restaurant.shifts.length, workHours: round2(workHours), serviceAmount: round2(serviceAmount),
-        invoiced: round2(invoiced), paid: round2(paid), remainingBalance: round2(invoiced - paid),
+        shiftCount: work.shiftCount, workHours: round2(work.hours), serviceAmount: round2(work.amount),
+        invoiced: round2(invoiced), paid: round2(paid),
+        // Debt is what the restaurant owes for services rendered minus what it
+        // paid. Invoices are informational only and no longer drive the balance.
+        remainingBalance: round2(work.amount - paid),
         lastPaymentDate: restaurant.payments[0]?.paymentDate ?? null,
       };
     });
@@ -291,6 +355,21 @@ export class ReportsService {
       last7Days: last7Days.dailyBreakdown,
       restaurantDistribution: todayReport.restaurantBreakdown,
       courierDistribution: todayReport.courierBreakdown,
+      // Simple per-courier / per-restaurant summaries for the overview tables.
+      couriers: courierAccounts.map((c) => ({
+        courierId: c.courierId,
+        courierName: c.courierName,
+        workHours: c.workHours,
+        earnings: c.earnings,
+        remainingPayable: c.remainingPayable,
+      })),
+      restaurants: restaurantAccounts.map((r) => ({
+        restaurantId: r.restaurantId,
+        restaurantName: r.restaurantName,
+        serviceAmount: r.serviceAmount,
+        paid: r.paid,
+        remainingBalance: r.remainingBalance,
+      })),
     };
   }
 }

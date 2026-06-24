@@ -1,12 +1,10 @@
 import {
   IsBoolean,
-  IsEmail,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Min,
-  MinLength,
   Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -29,18 +27,23 @@ export class UpdateCourierDto {
   phone?: string;
 
   @IsOptional()
+  @IsString()
+  plate?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber({}, { message: 'Saatlik ücret sayısal olmalıdır.' })
   @Min(0, { message: 'Saatlik ücret negatif olamaz.' })
   hourlyRate?: number;
 
   @IsOptional()
-  @IsEmail({}, { message: 'Geçerli bir e-posta adresi giriniz.' })
-  email?: string;
+  @IsString()
+  @IsNotEmpty({ message: 'Kullanıcı adı boş olamaz.' })
+  username?: string;
 
   @IsOptional()
   @IsString()
-  @MinLength(6, { message: 'Şifre en az 6 karakter olmalıdır.' })
+  @IsNotEmpty({ message: 'Şifre boş olamaz.' })
   password?: string;
 
   @IsOptional()

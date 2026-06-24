@@ -7,10 +7,14 @@ import { financeTransactionsApi } from '../../lib/financeApi';
 import { formatTL, formatDateTR } from '../../lib/format';
 import type { FinanceTransaction, FinanceTransactionType } from '../../types';
 import { extractError } from './AdvancesPage';
+import { useAuth } from '../../context/AuthContext';
+import { canEditFinance } from '../../lib/permissions';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function FinanceTransactionsPage() {
+  const { user } = useAuth();
+  const canEdit = canEditFinance(user);
   const [rows, setRows] = useState<FinanceTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ type: '', category: '', dateFrom: '', dateTo: '', status: '' });
@@ -125,7 +129,9 @@ export default function FinanceTransactionsPage() {
         </Filter>
         <div className="flex flex-1 items-end justify-end gap-2">
           <button onClick={() => setFilters({ type: '', category: '', dateFrom: '', dateTo: '', status: '' })} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-text hover:bg-slate-100">Temizle</button>
-          <button onClick={openCreate} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90">+ Yeni Kayıt</button>
+          {canEdit && (
+            <button onClick={openCreate} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90">+ Yeni Kayıt</button>
+          )}
         </div>
       </div>
 
@@ -157,10 +163,14 @@ export default function FinanceTransactionsPage() {
                   <td className="px-4 py-3 text-text">{formatTL(t.amount)}</td>
                   <td className="px-4 py-3"><StatusPill status={t.status} /></td>
                   <td className="px-4 py-3">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => openEdit(t)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-text hover:bg-slate-100">Düzenle</button>
-                      <button onClick={() => toggle(t)} className={`rounded-md px-2.5 py-1 text-xs font-medium text-white ${t.status === 'ACTIVE' ? 'bg-danger hover:bg-danger/90' : 'bg-success hover:bg-success/90'}`}>{t.status === 'ACTIVE' ? 'İptal Et' : 'Aktif Et'}</button>
-                    </div>
+                    {canEdit ? (
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => openEdit(t)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-text hover:bg-slate-100">Düzenle</button>
+                        <button onClick={() => toggle(t)} className={`rounded-md px-2.5 py-1 text-xs font-medium text-white ${t.status === 'ACTIVE' ? 'bg-danger hover:bg-danger/90' : 'bg-success hover:bg-success/90'}`}>{t.status === 'ACTIVE' ? 'İptal Et' : 'Aktif Et'}</button>
+                      </div>
+                    ) : (
+                      <span className="block text-right text-xs text-muted">—</span>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -1,18 +1,17 @@
 import {
   IsBoolean,
-  IsEmail,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Min,
-  MinLength,
   Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TURKISH_MOBILE_PHONE_MESSAGE, TURKISH_MOBILE_PHONE_REGEX } from '../../common/phone.util';
+import { LocationFields } from './location.fields';
 
-export class CreateRestaurantDto {
+export class CreateRestaurantDto extends LocationFields {
   @IsString()
   @IsNotEmpty({ message: 'Restoran adı zorunludur.' })
   name: string;
@@ -36,11 +35,12 @@ export class CreateRestaurantDto {
   @Min(0, { message: 'Saatlik ücret negatif olamaz.' })
   hourlyRate: number;
 
-  @IsEmail({}, { message: 'Geçerli bir e-posta adresi giriniz.' })
-  email: string;
+  @IsString()
+  @IsNotEmpty({ message: 'Kullanıcı adı zorunludur.' })
+  username: string;
 
   @IsString()
-  @MinLength(6, { message: 'Şifre en az 6 karakter olmalıdır.' })
+  @IsNotEmpty({ message: 'Şifre zorunludur.' })
   password: string;
 
   @IsOptional()

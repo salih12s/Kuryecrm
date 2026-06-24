@@ -3,8 +3,8 @@ import type { StatusFilter } from '../../types';
 interface Props {
   search: string;
   onSearch: (v: string) => void;
-  status: StatusFilter;
-  onStatus: (v: StatusFilter) => void;
+  status?: StatusFilter;
+  onStatus?: (v: StatusFilter) => void;
   onAdd: () => void;
   addLabel: string;
   searchPlaceholder: string;
@@ -34,21 +34,23 @@ export default function ListToolbar({
           placeholder={searchPlaceholder}
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 sm:max-w-xs"
         />
-        <div className="inline-flex rounded-lg border border-slate-300 bg-card p-0.5">
-          {FILTERS.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => onStatus(f.value)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                status === f.value
-                  ? 'bg-primary text-white'
-                  : 'text-muted hover:text-text'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        {status !== undefined && onStatus && (
+          <div className="inline-flex rounded-lg border border-slate-300 bg-card p-0.5">
+            {FILTERS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => onStatus(f.value)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  status === f.value
+                    ? 'bg-primary text-white'
+                    : 'text-muted hover:text-text'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <button
         onClick={onAdd}

@@ -1,10 +1,14 @@
-export type Role = 'ADMIN' | 'RESTAURANT' | 'COURIER';
+export type Role = 'ADMIN' | 'RESTAURANT' | 'COURIER' | 'KURYE_SEFI' | 'PARTNER';
+
+export type ApprovalStatus = 'APPROVED' | 'PENDING' | 'REJECTED';
 
 export interface User {
   id: string;
   name: string;
-  email: string;
+  username: string;
   role: Role;
+  /** Whether this user may create/edit finance records (admins always; partners by setting). */
+  financeEditable?: boolean;
 }
 
 export interface LoginResponse {
@@ -18,9 +22,24 @@ export interface MeResponse extends User {
   courier: Record<string, unknown> | null;
 }
 
+export interface AdminUser {
+  id: string;
+  name: string;
+  username: string;
+  role: Role;
+  isActive: boolean;
+  createdAt: string;
+  profile: { type: 'restaurant' | 'courier'; id: string; name: string } | null;
+}
+
 /** Maps each role to its default landing route. */
 export const ROLE_HOME: Record<Role, string> = {
   ADMIN: '/admin',
+  // Kurye Şefi shares the admin panel but cannot see finance/reports, so it
+  // lands on the operations (shifts) screen instead of the dashboard.
+  KURYE_SEFI: '/admin/shifts',
+  // Partners only see finance, so they land on a finance screen.
+  PARTNER: '/admin/finance-transactions',
   RESTAURANT: '/restaurant',
   COURIER: '/courier',
 };
@@ -34,7 +53,12 @@ export interface AdminRestaurant {
   address: string;
   hourlyRate: string;
   isActive: boolean;
-  email: string;
+  approvalStatus: ApprovalStatus;
+  rejectionNote: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  locationNote: string | null;
+  username: string;
   userId: string;
   createdAt: string;
   updatedAt: string;
@@ -45,12 +69,28 @@ export interface AdminCourier {
   id: string;
   name: string;
   phone: string;
+  plate: string | null;
   hourlyRate: string;
   isActive: boolean;
-  email: string;
+  approvalStatus: ApprovalStatus;
+  rejectionNote: string | null;
+  username: string;
   userId: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Pending approval queue (records created by a Kurye Şefi). */
+export interface PendingApprovals {
+  couriers: {
+    id: string; name: string; phone: string; plate: string | null;
+    username: string; hourlyRate: string; createdAt: string;
+  }[];
+  restaurants: {
+    id: string; name: string; authorizedPerson: string; phone: string;
+    username: string; hourlyRate: string; createdAt: string;
+  }[];
+  totalPending: number;
 }
 
 export type StatusFilter = 'all' | 'active' | 'passive';
@@ -206,6 +246,8 @@ export interface RestaurantAccountSummary {
     workHours: number;
     hourlyRate: string;
     serviceAmount: number;
+    /** Admin-only: courier earning for this shift portion. Absent in restaurant panel. */
+    courierEarning?: number;
   }[];
   invoices: Omit<Invoice, 'restaurantId' | 'restaurantName' | 'createdAt' | 'updatedAt'>[];
   payments: Omit<Payment, 'restaurantId' | 'restaurantName' | 'invoiceNo' | 'createdAt' | 'updatedAt'>[];
@@ -215,17 +257,40 @@ export interface RestaurantAccountListItem {
   id: string;
   name: string;
   isActive: boolean;
+  totalServiceAmount: number;
   totalInvoiced: number;
   totalPaid: number;
   remainingBalance: number;
 }
 
-export interface Shift {
+export interface ShiftSegment {
+  id: string;
+  restaurantId: string;
+  restaurantName: string;
+  startTime: string;
+  endTime: string | null;
+  sequence: number;
+}
+
+/** Late-start / overtime fields derived by the backend from planned vs actual. */
+export interface ShiftDerived {
+  actualStartTime: string | null;
+  actualEndTime: string | null;
+  lateMinutes: number;
+  isLate: boolean;
+  normalHours: number | null;
+  overtimeHours: number | null;
+  totalHours: number | null;
+}
+
+export interface Shift extends ShiftDerived {
   id: string;
   restaurantId: string;
   courierId: string;
   restaurantName: string;
   courierName: string;
+  courierUsername: string | null;
+  courierPlate: string | null;
   date: string;
   plannedStartTime: string;
   plannedEndTime: string;
@@ -239,6 +304,7 @@ export interface Shift {
   courierReportedEndTime: string | null;
   approvedStartTime: string | null;
   approvedEndTime: string | null;
+  segments: ShiftSegment[];
   status: ShiftStatus;
   confirmationStatus: ShiftConfirmationStatus;
   note: string | null;
@@ -285,8 +351,14 @@ export interface ReportSummary {
 
 export interface ReportShift {
   id: string; date: string; restaurantId: string; restaurantName: string;
-  courierId: string; courierName: string; approvedStartTime: string; approvedEndTime: string;
+  courierId: string; courierName: string;
+  plannedStartTime: string; plannedEndTime: string;
+  approvedStartTime: string; approvedEndTime: string;
+  actualStartTime: string; actualEndTime: string;
+  lateMinutes: number; isLate: boolean;
+  normalHours: number; overtimeHours: number; totalWorkHours: number;
   workHours: number; restaurantServiceAmount: number; courierEarning: number; grossDifference: number;
+  restaurants: { restaurantId: string; restaurantName: string | null; hours: number; amount: number }[];
 }
 
 export interface ReportBreakdown {
@@ -325,4 +397,57 @@ export interface DashboardReport extends ReportSummary {
   activeRestaurantCount: number; activeCourierCount: number; pendingShiftCount: number;
   last7Days: ({ date: string } & ReportSummary)[];
   restaurantDistribution: ReportBreakdown[]; courierDistribution: ReportBreakdown[];
+  couriers: { courierId: string; courierName: string; workHours: number; earnings: number; remainingPayable: number }[];
+  restaurants: { restaurantId: string; restaurantName: string; serviceAmount: number; paid: number; remainingBalance: number }[];
+}
+
+// ---------------- Settings & live tracking ----------------
+
+export interface AppSettings {
+  courier_location_interval_seconds: string;
+  courier_offline_threshold_seconds: string;
+  partners_can_edit_finance: string;
+}
+
+export interface TrackingStatus {
+  tracking: boolean;
+  intervalSeconds: number;
+  shiftId: string | null;
+  restaurantId: string | null;
+  restaurantName: string | null;
+}
+
+export interface LiveCourier {
+  courierId: string;
+  courierName: string;
+  courierUsername: string | null;
+  courierPlate: string | null;
+  shiftId: string;
+  restaurantId: string;
+  restaurantName: string;
+  plannedStartTime: string;
+  plannedEndTime: string;
+  lateMinutes: number;
+  isLate: boolean;
+  overtimeHours: number;
+  latitude: number | null;
+  longitude: number | null;
+  speed: number | null;
+  accuracy: number | null;
+  lastLocationAt: string | null;
+  secondsAgo: number | null;
+  online: boolean;
+  hasLocation: boolean;
+}
+
+export interface LiveMapRestaurant {
+  id: string; name: string; address: string;
+  latitude: number; longitude: number; locationNote: string | null;
+}
+
+export interface LiveMapData {
+  offlineThresholdSeconds: number;
+  generatedAt: string;
+  couriers: LiveCourier[];
+  restaurants: LiveMapRestaurant[];
 }

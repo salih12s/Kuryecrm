@@ -3,7 +3,7 @@ import DashboardLayout, { type NavItem } from '../DashboardLayout';
 
 const RESTAURANT_NAV: NavItem[] = [
   { label: 'Genel Bakış', to: '/restaurant' },
-  { label: 'Vardiyalarım', to: '/restaurant/shifts' },
+  { label: 'Kuryeler & Vardiyalar', to: '/restaurant/shifts' },
   { label: 'Cari Durumum', to: '/restaurant/account' },
 ];
 

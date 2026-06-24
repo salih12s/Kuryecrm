@@ -65,6 +65,12 @@ export default function ShiftsPage() {
   const [approveForm, setApproveForm] = useState({ start: '', end: '', adminNote: '' });
   const [approveError, setApproveError] = useState<string | null>(null);
 
+  // switch-restaurant modal (mid-shift restaurant change)
+  const [switchOpen, setSwitchOpen] = useState(false);
+  const [switchTarget, setSwitchTarget] = useState<Shift | null>(null);
+  const [switchForm, setSwitchForm] = useState({ newRestaurantId: '', switchTime: '' });
+  const [switchError, setSwitchError] = useState<string | null>(null);
+
   const load = async () => {
     setLoading(true);
     try {
@@ -186,6 +192,29 @@ export default function ShiftsPage() {
     }
   };
 
+  const openSwitch = (s: Shift) => {
+    setSwitchTarget(s);
+    setSwitchForm({ newRestaurantId: '', switchTime: '' });
+    setSwitchError(null);
+    setSwitchOpen(true);
+  };
+
+  const submitSwitch = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!switchTarget) return;
+    setSwitchError(null);
+    try {
+      await adminShiftsApi.switchRestaurant(switchTarget.id, {
+        newRestaurantId: switchForm.newRestaurantId,
+        switchTime: switchForm.switchTime,
+      });
+      setSwitchOpen(false);
+      await load();
+    } catch (err) {
+      setSwitchError(extractError(err));
+    }
+  };
+
   return (
     <AdminLayout>
       <div className="mb-6">
@@ -268,20 +297,20 @@ export default function ShiftsPage() {
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-[13px]">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-left text-muted">
-                <th className="px-3 py-3 font-medium">Tarih</th>
-                <th className="px-3 py-3 font-medium">Restoran</th>
-                <th className="px-3 py-3 font-medium">Kurye</th>
-                <th className="px-3 py-3 font-medium">Planlanan</th>
-                <th className="px-3 py-3 font-medium">Ekstra</th>
-                <th className="px-3 py-3 font-medium">Restoran Bild.</th>
-                <th className="px-3 py-3 font-medium">Kurye Bild.</th>
-                <th className="px-3 py-3 font-medium">Onaylı</th>
-                <th className="px-3 py-3 font-medium">Durum</th>
-                <th className="px-3 py-3 font-medium">Saat Kontrol</th>
-                <th className="px-3 py-3 text-right font-medium">İşlemler</th>
+              <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] uppercase tracking-wide text-muted">
+                <th className="px-2.5 py-2 font-medium">Tarih</th>
+                <th className="px-2.5 py-2 font-medium">Restoran</th>
+                <th className="px-2.5 py-2 font-medium">Kurye</th>
+                <th className="px-2.5 py-2 font-medium">Planlanan</th>
+                <th className="px-2.5 py-2 font-medium">Ekstra</th>
+                <th className="px-2.5 py-2 font-medium">Kurye Bild.</th>
+                <th className="px-2.5 py-2 font-medium">Onaylı</th>
+                <th className="px-2.5 py-2 font-medium">Geç / Mesai</th>
+                <th className="px-2.5 py-2 font-medium">Durum</th>
+                <th className="px-2.5 py-2 font-medium">Saat Kontrol</th>
+                <th className="px-2.5 py-2 text-right font-medium">İşlemler</th>
               </tr>
             </thead>
             <tbody>
@@ -292,19 +321,37 @@ export default function ShiftsPage() {
               ) : (
                 rows.map((s) => (
                   <tr key={s.id} className="border-b border-slate-100 last:border-0 align-top">
-                    <td className="px-3 py-3 font-medium text-text">{formatDateTR(s.date)}</td>
-                    <td className="px-3 py-3 text-text">{s.restaurantName}</td>
-                    <td className="px-3 py-3 text-text">{s.courierName}</td>
-                    <td className="px-3 py-3 text-muted">{timeRange(s.plannedStartTime, s.plannedEndTime)}</td>
-                    <td className="px-3 py-3 text-muted">{timeRange(s.extraStartTime, s.extraEndTime)}</td>
-                    <td className="px-3 py-3 text-muted">{timeRange(s.restaurantReportedStartTime, s.restaurantReportedEndTime)}</td>
-                    <td className="px-3 py-3 text-muted">{timeRange(s.courierReportedStartTime, s.courierReportedEndTime)}</td>
-                    <td className="px-3 py-3 text-muted">{timeRange(s.approvedStartTime, s.approvedEndTime)}</td>
-                    <td className="px-3 py-3"><ShiftStatusBadge status={s.status} /></td>
-                    <td className="px-3 py-3"><ConfirmationBadge status={s.confirmationStatus} /></td>
-                    <td className="px-3 py-3">
+                    <td className="px-2.5 py-2 font-medium text-text">{formatDateTR(s.date)}</td>
+                    <td className="px-2.5 py-2 text-text">
+                      {s.restaurantName}
+                      {s.segments.length > 0 && (
+                        <div className="mt-1 space-y-0.5">
+                          {s.segments.map((seg) => (
+                            <div key={seg.id} className="text-[11px] text-muted">
+                              {seg.restaurantName}: {timeRange(seg.startTime, seg.endTime)}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-2.5 py-2 text-text">{s.courierName}</td>
+                    <td className="px-2.5 py-2 text-muted">{timeRange(s.plannedStartTime, s.plannedEndTime)}</td>
+                    <td className="px-2.5 py-2 text-muted">{timeRange(s.extraStartTime, s.extraEndTime)}</td>
+                    <td className="px-2.5 py-2 text-muted">{timeRange(s.courierReportedStartTime, s.courierReportedEndTime)}</td>
+                    <td className="px-2.5 py-2 text-muted">{timeRange(s.approvedStartTime, s.approvedEndTime)}</td>
+                    <td className="px-2.5 py-2"><LateOvertimeCell shift={s} /></td>
+                    <td className="px-2.5 py-2"><ShiftStatusBadge status={s.status} /></td>
+                    <td className="px-2.5 py-2"><ConfirmationBadge status={s.confirmationStatus} /></td>
+                    <td className="px-2.5 py-2">
                       <div className="flex flex-wrap justify-end gap-1.5">
                         <button onClick={() => openEdit(s)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-text hover:bg-slate-100">Düzenle</button>
+                        <button
+                          onClick={() => openSwitch(s)}
+                          disabled={s.status === 'CANCELLED'}
+                          className="rounded-md border border-accent px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
+                        >
+                          Restoran Değiştir
+                        </button>
                         <button onClick={() => openApprove(s)} className="rounded-md bg-success px-2.5 py-1 text-xs font-medium text-white hover:bg-success/90">Saat Onayla</button>
                         <select
                           value={s.status}
@@ -398,7 +445,74 @@ export default function ShiftsPage() {
           </form>
         )}
       </Modal>
+
+      {/* Switch-restaurant modal */}
+      <Modal open={switchOpen} title="Vardiya İçinde Restoran Değiştir" onClose={() => setSwitchOpen(false)}>
+        {switchTarget && (
+          <form onSubmit={submitSwitch} className="space-y-4">
+            {switchError && (
+              <div className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">{switchError}</div>
+            )}
+            <div className="rounded-lg bg-slate-50 p-3 text-xs text-muted">
+              <p><b>Kurye:</b> {switchTarget.courierName}</p>
+              <p><b>Mevcut restoran:</b> {currentRestaurantName(switchTarget)}</p>
+              <p className="mt-1">Girilen saatte mevcut çalışma aralığı kapatılır ve yeni restoranda yeni bir aralık başlatılır. Vardiya tek kayıt olarak kalır.</p>
+            </div>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-text">Yeni Restoran</span>
+              <select
+                required
+                value={switchForm.newRestaurantId}
+                onChange={(e) => setSwitchForm({ ...switchForm, newRestaurantId: e.target.value })}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-accent"
+              >
+                <option value="">Seçiniz</option>
+                {restaurants
+                  .filter((r) => r.id !== currentRestaurantId(switchTarget))
+                  .map((r) => (<option key={r.id} value={r.id}>{r.name}</option>))}
+              </select>
+            </label>
+            <Field label="Geçiş Saati" type="time" required value={switchForm.switchTime} onChange={(e) => setSwitchForm({ ...switchForm, switchTime: e.target.value })} />
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setSwitchOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-text hover:bg-slate-100">Vazgeç</button>
+              <button type="submit" className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90">Geçişi Kaydet</button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </AdminLayout>
+  );
+}
+
+/** The restaurant the courier is currently working at (last open segment, else primary). */
+function currentRestaurantId(s: Shift): string {
+  const open = [...s.segments].sort((a, b) => a.sequence - b.sequence).find((seg) => seg.endTime === null);
+  return open ? open.restaurantId : s.restaurantId;
+}
+
+function currentRestaurantName(s: Shift): string {
+  const open = [...s.segments].sort((a, b) => a.sequence - b.sequence).find((seg) => seg.endTime === null);
+  return open ? open.restaurantName : s.restaurantName;
+}
+
+/** Late-start and overtime badges derived from the shift's planned vs actual times. */
+function LateOvertimeCell({ shift }: { shift: Shift }) {
+  const hasLate = shift.isLate && shift.lateMinutes > 0;
+  const hasOvertime = (shift.overtimeHours ?? 0) > 0;
+  if (!hasLate && !hasOvertime) return <span className="text-muted">—</span>;
+  return (
+    <div className="flex flex-col gap-1">
+      {hasLate && (
+        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-center text-[11px] font-medium text-amber-700">
+          {shift.lateMinutes} dk geç başladı
+        </span>
+      )}
+      {hasOvertime && (
+        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-center text-[11px] font-medium text-indigo-700">
+          {shift.overtimeHours} sa ek mesai
+        </span>
+      )}
+    </div>
   );
 }
 

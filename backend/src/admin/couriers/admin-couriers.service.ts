@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, Role } from '@prisma/client';
+import { ApprovalStatus, Prisma, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCourierDto } from '../dto/create-courier.dto';
@@ -16,19 +16,25 @@ export class AdminCouriersService {
     id: string;
     name: string;
     phone: string;
+    plate: string | null;
     hourlyRate: Prisma.Decimal;
     isActive: boolean;
+    approvalStatus: ApprovalStatus;
+    rejectionNote: string | null;
     createdAt: Date;
     updatedAt: Date;
-    user: { id: string; email: string; isActive: boolean };
+    user: { id: string; username: string; isActive: boolean };
   }) {
     return {
       id: courier.id,
       name: courier.name,
       phone: courier.phone,
+      plate: courier.plate,
       hourlyRate: courier.hourlyRate.toString(),
       isActive: courier.isActive,
-      email: courier.user.email,
+      approvalStatus: courier.approvalStatus,
+      rejectionNote: courier.rejectionNote,
+      username: courier.user.username,
       userId: courier.user.id,
       createdAt: courier.createdAt,
       updatedAt: courier.updatedAt,
@@ -36,6 +42,10 @@ export class AdminCouriersService {
   }
 
   async findAll(query: ListQueryDto) {
+    // All records show in the list (including pending ones, flagged with their
+    // approval status in the UI) so the creator can still see what they added.
+    // The optional active/passive filter is still used by other screens (e.g.
+    // shift dropdowns request only active = approved & enabled records).
     const where: Prisma.CourierWhereInput = {};
 
     if (query.status === 'active') where.isActive = true;
@@ -46,13 +56,14 @@ export class AdminCouriersService {
       where.OR = [
         { name: { contains: term, mode: 'insensitive' } },
         { phone: { contains: term, mode: 'insensitive' } },
-        { user: { email: { contains: term, mode: 'insensitive' } } },
+        { plate: { contains: term, mode: 'insensitive' } },
+        { user: { username: { contains: term, mode: 'insensitive' } } },
       ];
     }
 
     const couriers = await this.prisma.courier.findMany({
       where,
-      include: { user: { select: { id: true, email: true, isActive: true } } },
+      include: { user: { select: { id: true, username: true, isActive: true } } },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -62,7 +73,7 @@ export class AdminCouriersService {
   async findOne(id: string) {
     const courier = await this.prisma.courier.findUnique({
       where: { id },
-      include: { user: { select: { id: true, email: true, isActive: true } } },
+      include: { user: { select: { id: true, username: true, isActive: true } } },
     });
 
     if (!courier) {
@@ -73,17 +84,22 @@ export class AdminCouriersService {
   }
 
   async create(dto: CreateCourierDto) {
-    const email = dto.email.toLowerCase().trim();
-    await this.assertEmailAvailable(email);
+    const username = dto.username.toLowerCase().trim();
+    await this.assertUsernameAvailable(username);
 
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
-    const isActive = dto.isActive ?? true;
+
+    // Every new record - whoever creates it - lands in the admin approval
+    // queue. It stays inactive (cannot log in, cannot be assigned to shifts)
+    // and only appears in the couriers list once an admin approves it.
+    const approvalStatus = ApprovalStatus.PENDING;
+    const isActive = false;
 
     try {
       const user = await this.prisma.user.create({
         data: {
           name: dto.name,
-          email,
+          username,
           passwordHash,
           role: Role.COURIER,
           isActive,
@@ -91,12 +107,14 @@ export class AdminCouriersService {
             create: {
               name: dto.name,
               phone: dto.phone,
+              plate: dto.plate || null,
               hourlyRate: new Prisma.Decimal(dto.hourlyRate),
               isActive,
+              approvalStatus,
             },
           },
         },
-        include: { courier: { include: { user: { select: { id: true, email: true, isActive: true } } } } },
+        include: { courier: { include: { user: { select: { id: true, username: true, isActive: true } } } } },
       });
 
       return this.serialize(user.courier!);
@@ -105,7 +123,7 @@ export class AdminCouriersService {
     }
   }
 
-  async update(id: string, dto: UpdateCourierDto) {
+  async update(id: string, dto: UpdateCourierDto, updaterRole: Role) {
     const courier = await this.prisma.courier.findUnique({
       where: { id },
       include: { user: true },
@@ -114,12 +132,16 @@ export class AdminCouriersService {
       throw new NotFoundException('Kurye bulunamadı.');
     }
 
+    // Only admins control active status; ignore it for Kurye Şefi so they
+    // cannot bypass approval by activating a record through an edit.
+    if (updaterRole !== Role.ADMIN) dto.isActive = undefined;
+
     const userData: Prisma.UserUpdateInput = {};
-    if (dto.email) {
-      const email = dto.email.toLowerCase().trim();
-      if (email !== courier.user.email) {
-        await this.assertEmailAvailable(email, courier.userId);
-        userData.email = email;
+    if (dto.username) {
+      const username = dto.username.toLowerCase().trim();
+      if (username !== courier.user.username) {
+        await this.assertUsernameAvailable(username, courier.userId);
+        userData.username = username;
       }
     }
     if (dto.name) userData.name = dto.name;
@@ -131,6 +153,7 @@ export class AdminCouriersService {
     const courierData: Prisma.CourierUpdateInput = {};
     if (dto.name) courierData.name = dto.name;
     if (dto.phone) courierData.phone = dto.phone;
+    if (dto.plate !== undefined) courierData.plate = dto.plate || null;
     if (dto.hourlyRate !== undefined) {
       courierData.hourlyRate = new Prisma.Decimal(dto.hourlyRate);
     }
@@ -144,7 +167,7 @@ export class AdminCouriersService {
         return tx.courier.update({
           where: { id },
           data: courierData,
-          include: { user: { select: { id: true, email: true, isActive: true } } },
+          include: { user: { select: { id: true, username: true, isActive: true } } },
         });
       });
       return this.serialize(updated);
@@ -154,37 +177,29 @@ export class AdminCouriersService {
   }
 
   /**
-   * Soft enable/disable. Keeps Courier.isActive and the linked User.isActive
-   * in sync so a passive courier cannot log in.
+   * Permanently deletes a courier and its linked login user. Deleting the user
+   * cascades (schema onDelete: Cascade) to the courier and all of its shifts,
+   * advances, payments and locations.
    */
-  async setStatus(id: string, isActive: boolean) {
+  async remove(id: string) {
     const courier = await this.prisma.courier.findUnique({ where: { id } });
     if (!courier) {
       throw new NotFoundException('Kurye bulunamadı.');
     }
-
-    const updated = await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id: courier.userId }, data: { isActive } });
-      return tx.courier.update({
-        where: { id },
-        data: { isActive },
-        include: { user: { select: { id: true, email: true, isActive: true } } },
-      });
-    });
-
-    return this.serialize(updated);
+    await this.prisma.user.delete({ where: { id: courier.userId } });
+    return { id };
   }
 
-  private async assertEmailAvailable(email: string, ignoreUserId?: string) {
-    const existing = await this.prisma.user.findUnique({ where: { email } });
+  private async assertUsernameAvailable(username: string, ignoreUserId?: string) {
+    const existing = await this.prisma.user.findUnique({ where: { username } });
     if (existing && existing.id !== ignoreUserId) {
-      throw new ConflictException('Bu e-posta adresi zaten kullanılıyor.');
+      throw new ConflictException('Bu kullanıcı adı zaten kullanılıyor.');
     }
   }
 
   private handlePrismaError(e: unknown): never {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-      throw new ConflictException('Bu e-posta adresi zaten kullanılıyor.');
+      throw new ConflictException('Bu kullanıcı adı zaten kullanılıyor.');
     }
     throw e;
   }

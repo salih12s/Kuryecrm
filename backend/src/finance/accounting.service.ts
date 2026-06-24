@@ -10,6 +10,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { durationHours, round2 } from '../common/time.util';
+import { restaurantRevenueBreakdown, shiftServiceAmountForRestaurant } from '../common/shift-calc.util';
 
 /** Only fully-approved shifts feed the money calculations. */
 const APPROVED_WHERE = {
@@ -103,36 +104,49 @@ export class AccountingService {
   // ---------------------------------------------------------------- RESTAURANT
 
   /**
-   * Restaurant account summary. Safe for BOTH admin and the restaurant's own
-   * panel: it exposes only the restaurant's own service amount (their rate),
-   * never the courier cost or the platform's profit.
+   * Restaurant account summary. Safe for the restaurant's own panel by default:
+   * it exposes only the restaurant's own service amount (their rate). When
+   * `includeCourierCost` is true (admin only) each shift row also carries the
+   * courier's earning for that portion, which restaurants must never see.
    */
-  async restaurantSummary(restaurantId: string) {
+  async restaurantSummary(restaurantId: string, includeCourierCost = false) {
     const restaurant = await this.prisma.restaurant.findUnique({ where: { id: restaurantId } });
     if (!restaurant) throw new NotFoundException('Restoran bulunamadı.');
 
+    // Include shifts where this restaurant is the primary one OR where the
+    // courier switched into this restaurant for part of the shift (a segment).
     const shifts = await this.prisma.shift.findMany({
-      where: { restaurantId, ...APPROVED_WHERE },
-      include: { courier: { select: { name: true } } },
+      where: {
+        ...APPROVED_WHERE,
+        OR: [{ restaurantId }, { segments: { some: { restaurantId } } }],
+      },
+      include: {
+        courier: { select: { name: true } },
+        segments: { include: { restaurant: { select: { id: true, name: true } } }, orderBy: { sequence: 'asc' } },
+      },
       orderBy: [{ date: 'desc' }],
     });
 
     let totalWorkHours = 0;
     let totalServiceAmount = 0;
     const shiftItems = shifts.map((s) => {
-      const hours = durationHours(s.approvedStartTime as string, s.approvedEndTime as string);
-      const service = hours * Number(s.restaurantHourlyRateSnapshot);
-      totalWorkHours += hours;
-      totalServiceAmount += service;
+      // Only this restaurant's portion of the (possibly multi-restaurant) shift.
+      const portion = shiftServiceAmountForRestaurant(s, restaurantId);
+      totalWorkHours += portion.hours;
+      totalServiceAmount += portion.amount;
       return {
         id: s.id,
         date: s.date,
         courierName: s.courier.name,
         approvedStartTime: s.approvedStartTime,
         approvedEndTime: s.approvedEndTime,
-        workHours: round2(hours),
+        workHours: round2(portion.hours),
         hourlyRate: s.restaurantHourlyRateSnapshot.toString(),
-        serviceAmount: round2(service),
+        serviceAmount: round2(portion.amount),
+        // Admin-only: what the courier earns for this portion of the shift.
+        ...(includeCourierCost
+          ? { courierEarning: round2(portion.hours * Number(s.courierHourlyRateSnapshot)) }
+          : {}),
       };
     });
 
@@ -164,7 +178,8 @@ export class AccountingService {
       totalServiceAmount: round2(totalServiceAmount),
       totalInvoiced: round2(totalInvoiced),
       totalPaid: round2(totalPaid),
-      remainingBalance: round2(totalInvoiced - totalPaid),
+      // Debt is service rendered minus payments. Invoices are informational.
+      remainingBalance: round2(totalServiceAmount - totalPaid),
       shifts: shiftItems,
       invoices: invoices.map((i) => ({
         id: i.id,
@@ -188,15 +203,32 @@ export class AccountingService {
     };
   }
 
-  /** Admin restaurant-cari list: each restaurant with invoice/payment totals. */
+  /** Admin restaurant-cari list: each restaurant with service/payment totals. */
   async restaurantAccountsList() {
-    const restaurants = await this.prisma.restaurant.findMany({
-      orderBy: [{ name: 'asc' }],
-      include: {
-        invoices: { select: { amount: true, status: true } },
-        payments: { select: { amount: true, status: true } },
-      },
-    });
+    const [restaurants, shifts] = await Promise.all([
+      this.prisma.restaurant.findMany({
+        orderBy: [{ name: 'asc' }],
+        include: {
+          invoices: { select: { amount: true, status: true } },
+          payments: { select: { amount: true, status: true } },
+        },
+      }),
+      this.prisma.shift.findMany({
+        where: APPROVED_WHERE,
+        include: {
+          segments: { include: { restaurant: { select: { id: true, name: true } } }, orderBy: { sequence: 'asc' } },
+        },
+      }),
+    ]);
+
+    // Sum each restaurant's service amount across all approved (possibly
+    // multi-restaurant) shifts.
+    const serviceByRestaurant = new Map<string, number>();
+    for (const shift of shifts) {
+      for (const part of restaurantRevenueBreakdown(shift)) {
+        serviceByRestaurant.set(part.restaurantId, (serviceByRestaurant.get(part.restaurantId) ?? 0) + part.amount);
+      }
+    }
 
     return restaurants.map((r) => {
       const totalInvoiced = r.invoices
@@ -205,13 +237,16 @@ export class AccountingService {
       const totalPaid = r.payments
         .filter((p) => p.status === PaymentStatus.ACTIVE)
         .reduce((sum, p) => sum + Number(p.amount), 0);
+      const totalServiceAmount = serviceByRestaurant.get(r.id) ?? 0;
       return {
         id: r.id,
         name: r.name,
         isActive: r.isActive,
+        totalServiceAmount: round2(totalServiceAmount),
         totalInvoiced: round2(totalInvoiced),
         totalPaid: round2(totalPaid),
-        remainingBalance: round2(totalInvoiced - totalPaid),
+        // Debt is service rendered minus payments. Invoices are informational.
+        remainingBalance: round2(totalServiceAmount - totalPaid),
       };
     });
   }

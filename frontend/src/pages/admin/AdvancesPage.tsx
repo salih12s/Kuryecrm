@@ -8,10 +8,14 @@ import { accountsApi, advancesApi } from '../../lib/financeApi';
 import { couriersApi } from '../../lib/adminApi';
 import { formatTL, formatDateTR } from '../../lib/format';
 import type { Advance, AdminCourier, CourierAccountSummary } from '../../types';
+import { useAuth } from '../../context/AuthContext';
+import { canEditFinance } from '../../lib/permissions';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function AdvancesPage() {
+  const { user } = useAuth();
+  const canEdit = canEditFinance(user);
   const [rows, setRows] = useState<Advance[]>([]);
   const [loading, setLoading] = useState(true);
   const [couriers, setCouriers] = useState<AdminCourier[]>([]);
@@ -139,7 +143,9 @@ export default function AdvancesPage() {
         </Filter>
         <div className="flex flex-1 items-end justify-end gap-2">
           <button onClick={() => setFilters({ courierId: '', dateFrom: '', dateTo: '', status: '' })} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-text hover:bg-slate-100">Temizle</button>
-          <button onClick={openCreate} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90">+ Yeni Avans Ekle</button>
+          {canEdit && (
+            <button onClick={openCreate} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90">+ Yeni Avans Ekle</button>
+          )}
         </div>
       </div>
 
@@ -169,10 +175,14 @@ export default function AdvancesPage() {
                   <td className="px-4 py-3 text-muted">{a.note ?? '—'}</td>
                   <td className="px-4 py-3"><StatusPill status={a.status} /></td>
                   <td className="px-4 py-3">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => openEdit(a)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-text hover:bg-slate-100">Düzenle</button>
-                      <button onClick={() => toggle(a)} className={`rounded-md px-2.5 py-1 text-xs font-medium text-white ${a.status === 'ACTIVE' ? 'bg-danger hover:bg-danger/90' : 'bg-success hover:bg-success/90'}`}>{a.status === 'ACTIVE' ? 'İptal Et' : 'Aktif Et'}</button>
-                    </div>
+                    {canEdit ? (
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => openEdit(a)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-text hover:bg-slate-100">Düzenle</button>
+                        <button onClick={() => toggle(a)} className={`rounded-md px-2.5 py-1 text-xs font-medium text-white ${a.status === 'ACTIVE' ? 'bg-danger hover:bg-danger/90' : 'bg-success hover:bg-success/90'}`}>{a.status === 'ACTIVE' ? 'İptal Et' : 'Aktif Et'}</button>
+                      </div>
+                    ) : (
+                      <span className="block text-right text-xs text-muted">—</span>
+                    )}
                   </td>
                 </tr>
               ))}

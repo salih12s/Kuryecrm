@@ -39,3 +39,6 @@ prisma/*.db
 # Misc
 *.tsbuildinfo
 coverage/
+
+# Production build archives
+*.zip

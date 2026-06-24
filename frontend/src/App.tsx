@@ -23,6 +23,10 @@ import RestaurantReportPage from './pages/admin/RestaurantReportPage';
 import CourierReportPage from './pages/admin/CourierReportPage';
 import CourierPaymentsPage from './pages/admin/CourierPaymentsPage';
 import SystemGuidePage from './pages/admin/SystemGuidePage';
+import ApprovalsPage from './pages/admin/ApprovalsPage';
+import LiveMapPage from './pages/admin/LiveMapPage';
+import SettingsPage from './pages/admin/SettingsPage';
+import UsersPage from './pages/admin/UsersPage';
 
 /** Sends the visitor to their role home, or to /login if signed out. */
 function RootRedirect() {
@@ -53,24 +57,24 @@ export default function App() {
       />
       <Route
         path="/admin/reports/daily"
-        element={<ProtectedRoute allowedRoles={['ADMIN']}><DailyReportPage /></ProtectedRoute>}
+        element={<ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}><DailyReportPage /></ProtectedRoute>}
       />
       <Route
         path="/admin/reports/range"
-        element={<ProtectedRoute allowedRoles={['ADMIN']}><RangeReportPage /></ProtectedRoute>}
+        element={<ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}><RangeReportPage /></ProtectedRoute>}
       />
       <Route
         path="/admin/reports/restaurants"
-        element={<ProtectedRoute allowedRoles={['ADMIN']}><RestaurantReportPage /></ProtectedRoute>}
+        element={<ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}><RestaurantReportPage /></ProtectedRoute>}
       />
       <Route
         path="/admin/reports/couriers"
-        element={<ProtectedRoute allowedRoles={['ADMIN']}><CourierReportPage /></ProtectedRoute>}
+        element={<ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}><CourierReportPage /></ProtectedRoute>}
       />
       <Route
         path="/admin/restaurants"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI']}>
             <RestaurantsPage />
           </ProtectedRoute>
         }
@@ -78,7 +82,7 @@ export default function App() {
       <Route
         path="/admin/couriers"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI']}>
             <CouriersPage />
           </ProtectedRoute>
         }
@@ -86,19 +90,27 @@ export default function App() {
       <Route
         path="/admin/shifts"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI']}>
             <ShiftsPage />
           </ProtectedRoute>
         }
       />
       <Route
+        path="/admin/approvals"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <ApprovalsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/courier-payments"
-        element={<ProtectedRoute allowedRoles={['ADMIN']}><CourierPaymentsPage /></ProtectedRoute>}
+        element={<ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}><CourierPaymentsPage /></ProtectedRoute>}
       />
       <Route
         path="/admin/advances"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}>
             <AdvancesPage />
           </ProtectedRoute>
         }
@@ -106,7 +118,7 @@ export default function App() {
       <Route
         path="/admin/restaurant-accounts"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}>
             <RestaurantAccountsPage />
           </ProtectedRoute>
         }
@@ -114,7 +126,7 @@ export default function App() {
       <Route
         path="/admin/finance-transactions"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}>
             <FinanceTransactionsPage />
           </ProtectedRoute>
         }
@@ -122,10 +134,26 @@ export default function App() {
       <Route
         path="/admin/couriers/:id/account"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}>
             <CourierAccountAdminPage />
           </ProtectedRoute>
         }
+      />
+      <Route
+        path="/admin/live-map"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI']}>
+            <LiveMapPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users"
+        element={<ProtectedRoute allowedRoles={['ADMIN']}><UsersPage /></ProtectedRoute>}
+      />
+      <Route
+        path="/admin/settings"
+        element={<ProtectedRoute allowedRoles={['ADMIN']}><SettingsPage /></ProtectedRoute>}
       />
       <Route
         path="/admin/guide"

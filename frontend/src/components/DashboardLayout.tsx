@@ -24,6 +24,8 @@ interface Props {
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Yönetici',
+  KURYE_SEFI: 'Kurye Şefi',
+  PARTNER: 'Ortak',
   RESTAURANT: 'Restoran',
   COURIER: 'Kurye',
 };
@@ -61,7 +63,7 @@ export default function DashboardLayout({ brand, navItems = [], navSections, chi
     .find((item) => item.to === pathname);
 
   const baseItem =
-    'rounded-lg px-3 py-2.5 text-left text-sm transition-colors block w-full';
+    'rounded-lg px-3 py-2 text-left text-sm transition-colors block w-full';
 
   const renderItem = (item: NavItem) =>
     item.to ? (
@@ -94,23 +96,20 @@ export default function DashboardLayout({ brand, navItems = [], navSections, chi
     <div className="flex min-h-screen bg-background text-text">
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-30 flex w-72 transform flex-col bg-primary text-white shadow-xl transition-transform duration-200 md:sticky md:top-0 md:h-screen md:translate-x-0 md:shadow-none ${
+        className={`fixed inset-y-0 left-0 z-30 flex w-64 transform flex-col bg-primary text-white shadow-xl transition-transform duration-200 md:sticky md:top-0 md:h-screen md:translate-x-0 md:shadow-none ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex h-20 shrink-0 items-center gap-3 border-b border-white/10 px-6">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-lg font-bold shadow-sm">
+        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-white/10 px-4">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-base font-bold shadow-sm">
             K
           </span>
           <div>
-            <span className="block text-lg font-semibold">{brand}</span>
-            <span className="block text-xs text-slate-400">İş yönetim paneli</span>
+            <span className="block text-base font-semibold leading-tight">{brand}</span>
+            <span className="block text-[11px] text-slate-400">İş yönetim paneli</span>
           </div>
         </div>
-        <nav className="flex-1 space-y-2 overflow-y-auto p-4" aria-label="Ana menü">
-          <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-            Menü
-          </p>
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-3" aria-label="Ana menü">
           {sections.map((section, index) => {
             const isOpen = !section.collapsible || openSections.includes(index);
             const hasActiveItem = index === activeSection;
@@ -126,7 +125,7 @@ export default function DashboardLayout({ brand, navItems = [], navSections, chi
                           : [...current, index],
                       )
                     }
-                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition-colors ${
+                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors ${
                       hasActiveItem ? 'bg-white/10 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white'
                     }`}
                     aria-expanded={isOpen}
@@ -148,7 +147,7 @@ export default function DashboardLayout({ brand, navItems = [], navSections, chi
             );
           })}
         </nav>
-        <div className="shrink-0 border-t border-white/10 px-6 py-4">
+        <div className="shrink-0 border-t border-white/10 px-4 py-3">
           <p className="truncate text-sm font-medium">{user?.name}</p>
           <p className="text-xs text-slate-400">{user ? ROLE_LABELS[user.role] ?? user.role : ''}</p>
         </div>

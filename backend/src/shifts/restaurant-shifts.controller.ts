@@ -1,13 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser, AuthUser } from '../auth/decorators/current-user.decorator';
 import { ShiftsService } from './shifts.service';
-import { ReportTimeDto } from './dto/report-time.dto';
 import { PartyShiftQueryDto } from './dto/shift-query.dto';
 
+// Read-only for restaurants: a restaurant can view the shifts of couriers
+// working at it, but can no longer report or change any shift times. Time entry
+// and shift management are handled only by admin / Kurye Şefi.
 @Controller('restaurant/shifts')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.RESTAURANT)
@@ -22,14 +24,5 @@ export class RestaurantShiftsController {
   @Get(':id')
   findOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.shifts.restaurantFindOne(user.userId, id);
-  }
-
-  @Patch(':id/report-time')
-  reportTime(
-    @CurrentUser() user: AuthUser,
-    @Param('id') id: string,
-    @Body() dto: ReportTimeDto,
-  ) {
-    return this.shifts.restaurantReportTime(user.userId, id, dto);
   }
 }

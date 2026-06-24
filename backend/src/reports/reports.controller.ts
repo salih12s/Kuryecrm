@@ -6,9 +6,10 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { ReportsService } from './reports.service';
 import { DailyReportQueryDto, RangeReportQueryDto, assertDateRange } from './dto/report-query.dto';
 
+// Financial reports are visible to admins and partners (read-only).
 @Controller('admin/reports')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@Roles(Role.ADMIN, Role.PARTNER)
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 

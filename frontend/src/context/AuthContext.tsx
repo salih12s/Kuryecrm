@@ -5,7 +5,7 @@ import type { LoginResponse, MeResponse, User } from '../types';
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<User>;
+  login: (username: string, password: string) => Promise<User>;
   logout: () => void;
 }
 
@@ -29,8 +29,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser({
           id: res.data.id,
           name: res.data.name,
-          email: res.data.email,
+          username: res.data.username,
           role: res.data.role,
+          financeEditable: res.data.financeEditable,
         });
       })
       .catch(() => {
@@ -40,8 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = async (email: string, password: string): Promise<User> => {
-    const res = await api.post<LoginResponse>('/auth/login', { email, password });
+  const login = async (username: string, password: string): Promise<User> => {
+    const res = await api.post<LoginResponse>('/auth/login', { username, password });
     tokenStorage.set(res.data.accessToken);
     setUser(res.data.user);
     return res.data.user;

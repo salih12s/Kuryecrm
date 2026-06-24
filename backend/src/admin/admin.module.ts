@@ -5,9 +5,19 @@ import { AdminRestaurantsController } from './restaurants/admin-restaurants.cont
 import { AdminRestaurantsService } from './restaurants/admin-restaurants.service';
 import { AdminCouriersController } from './couriers/admin-couriers.controller';
 import { AdminCouriersService } from './couriers/admin-couriers.service';
+import { AdminApprovalsController } from './approvals/admin-approvals.controller';
+import { AdminApprovalsService } from './approvals/admin-approvals.service';
+import { AdminUsersController } from './users/admin-users.controller';
+import { AdminUsersService } from './users/admin-users.service';
 
 @Module({
-  controllers: [AdminController, AdminRestaurantsController, AdminCouriersController],
-  providers: [AdminService, AdminRestaurantsService, AdminCouriersService],
+  controllers: [
+    AdminController,
+    AdminRestaurantsController,
+    AdminCouriersController,
+    AdminApprovalsController,
+    AdminUsersController,
+  ],
+  providers: [AdminService, AdminRestaurantsService, AdminCouriersService, AdminApprovalsService, AdminUsersService],
 })
 export class AdminModule {}

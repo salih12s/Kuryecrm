@@ -7,7 +7,7 @@ import axios from 'axios';
 export default function LoginPage() {
   const { user, login, loading } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -22,7 +22,7 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const loggedIn = await login(email, password);
+      const loggedIn = await login(username, password);
       navigate(ROLE_HOME[loggedIn.role], { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -59,13 +59,15 @@ export default function LoginPage() {
           )}
 
           <label className="mb-4 block">
-            <span className="mb-1 block text-sm font-medium text-text">E-posta</span>
+            <span className="mb-1 block text-sm font-medium text-text">Kullanıcı Adı</span>
             <input
-              type="email"
+              type="text"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="ornek@kuryecrm.local"
+              autoCapitalize="none"
+              autoCorrect="off"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="kullaniciadi"
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
             />
           </label>

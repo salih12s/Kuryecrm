@@ -1,12 +1,10 @@
 import {
   IsBoolean,
-  IsEmail,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Min,
-  MinLength,
   Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -22,16 +20,21 @@ export class CreateCourierDto {
   @Matches(TURKISH_MOBILE_PHONE_REGEX, { message: TURKISH_MOBILE_PHONE_MESSAGE })
   phone: string;
 
+  @IsOptional()
+  @IsString()
+  plate?: string;
+
   @Type(() => Number)
   @IsNumber({}, { message: 'Saatlik ücret sayısal olmalıdır.' })
   @Min(0, { message: 'Saatlik ücret negatif olamaz.' })
   hourlyRate: number;
 
-  @IsEmail({}, { message: 'Geçerli bir e-posta adresi giriniz.' })
-  email: string;
+  @IsString()
+  @IsNotEmpty({ message: 'Kullanıcı adı zorunludur.' })
+  username: string;
 
   @IsString()
-  @MinLength(6, { message: 'Şifre en az 6 karakter olmalıdır.' })
+  @IsNotEmpty({ message: 'Şifre zorunludur.' })
   password: string;
 
   @IsOptional()

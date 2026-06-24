@@ -8,10 +8,14 @@ import { accountsApi, invoicesApi, paymentsApi } from '../../lib/financeApi';
 import { formatTL, formatDateTR } from '../../lib/format';
 import type { RestaurantAccountListItem, RestaurantAccountSummary } from '../../types';
 import { extractError } from './AdvancesPage';
+import { useAuth } from '../../context/AuthContext';
+import { canEditFinance } from '../../lib/permissions';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function RestaurantAccountsPage() {
+  const { user } = useAuth();
+  const canEdit = canEditFinance(user);
   const [list, setList] = useState<RestaurantAccountListItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<RestaurantAccountSummary | null>(null);
@@ -56,12 +60,6 @@ export default function RestaurantAccountsPage() {
   };
 
   // ---- invoice ----
-  const openInvoiceCreate = () => {
-    setEditInvoiceId(null);
-    setInvoiceForm({ invoiceNo: '', invoiceDate: today(), periodStart: '', periodEnd: '', amount: '', note: '' });
-    setError(null);
-    setInvoiceModal(true);
-  };
   const openInvoiceEdit = (inv: RestaurantAccountSummary['invoices'][number]) => {
     setEditInvoiceId(inv.id);
     setInvoiceForm({
@@ -144,7 +142,10 @@ export default function RestaurantAccountsPage() {
     <AdminLayout>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-primary">Restoran Cari</h1>
-        <p className="mt-1 text-sm text-muted">Fatura ve ödemeleri yönetin, kalan bakiyeyi takip edin.</p>
+        <p className="mt-1 text-sm text-muted">
+          Her restoranın hizmet bedeli (onaylı vardiyalardan), yaptığı ödemeler ve kalan borcu.
+          <span className="font-medium text-text"> Kalan Borç = Hizmet Bedeli − Ödenen.</span>
+        </p>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm">
@@ -153,9 +154,9 @@ export default function RestaurantAccountsPage() {
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-muted">
                 <th className="px-4 py-3 font-medium">Restoran</th>
-                <th className="px-4 py-3 font-medium">Toplam Fatura</th>
-                <th className="px-4 py-3 font-medium">Toplam Ödeme</th>
-                <th className="px-4 py-3 font-medium">Kalan Bakiye</th>
+                <th className="px-4 py-3 font-medium">Hizmet Bedeli</th>
+                <th className="px-4 py-3 font-medium">Ödenen</th>
+                <th className="px-4 py-3 font-medium">Kalan Borç</th>
                 <th className="px-4 py-3 font-medium">Durum</th>
                 <th className="px-4 py-3 text-right font-medium">İşlemler</th>
               </tr>
@@ -168,12 +169,12 @@ export default function RestaurantAccountsPage() {
               ) : list.map((r) => (
                 <tr key={r.id} className={`border-b border-slate-100 last:border-0 ${selectedId === r.id ? 'bg-accent/5' : ''}`}>
                   <td className="px-4 py-3 font-medium text-text">{r.name}</td>
-                  <td className="px-4 py-3 text-text">{formatTL(r.totalInvoiced)}</td>
+                  <td className="px-4 py-3 text-text">{formatTL(r.totalServiceAmount)}</td>
                   <td className="px-4 py-3 text-text">{formatTL(r.totalPaid)}</td>
                   <td className={`px-4 py-3 font-semibold ${r.remainingBalance > 0 ? 'text-danger' : 'text-success'}`}>{formatTL(r.remainingBalance)}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${r.remainingBalance > 0 ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'}`}>
-                      {r.remainingBalance > 0 ? 'Borçlu' : 'Kapalı'}
+                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${balanceStyle(r.remainingBalance)}`}>
+                      {balanceLabel(r.remainingBalance)}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -195,18 +196,22 @@ export default function RestaurantAccountsPage() {
             <>
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold text-primary">{detail.restaurant.name} — Cari Detay</h2>
-                <div className="flex gap-2">
-                  <button onClick={openInvoiceCreate} className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary/90">+ Fatura Ekle</button>
-                  <button onClick={openPaymentCreate} className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent/90">+ Ödeme Ekle</button>
-                </div>
+                {canEdit && (
+                  <div className="flex gap-2">
+                    <button onClick={openPaymentCreate} className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent/90">+ Ödeme Ekle</button>
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <StatCard label="Hizmet Bedeli (onaylı vardiya)" value={formatTL(detail.totalServiceAmount)} />
-                <StatCard label="Toplam Fatura" value={formatTL(detail.totalInvoiced)} />
-                <StatCard label="Toplam Ödeme" value={formatTL(detail.totalPaid)} />
-                <StatCard label="Kalan Bakiye" value={formatTL(detail.remainingBalance)} accent />
+                <StatCard label="Ödenen" value={formatTL(detail.totalPaid)} />
+                <StatCard label="Kalan Borç" value={formatTL(detail.remainingBalance)} accent />
               </div>
+              <p className="-mt-2 text-xs text-muted">
+                Kalan Borç = Hizmet Bedeli − Ödenen.
+                {detail.remainingBalance < 0 && ' (Negatif değer restoranın fazla ödeme yaptığını gösterir.)'}
+              </p>
 
               {/* Invoices */}
               <Section title="Faturalar">
@@ -224,10 +229,14 @@ export default function RestaurantAccountsPage() {
                         <td className="px-4 py-2 text-text">{formatTL(inv.amount)}</td>
                         <td className="px-4 py-2"><InvoiceStatusBadge status={inv.status} /></td>
                         <td className="px-4 py-2">
-                          <div className="flex justify-end gap-2">
-                            <button onClick={() => openInvoiceEdit(inv)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-text hover:bg-slate-100">Düzenle</button>
-                            {inv.status !== 'CANCELLED' && <button onClick={() => cancelInvoice(inv.id)} className="rounded-md bg-danger px-2.5 py-1 text-xs text-white hover:bg-danger/90">İptal</button>}
-                          </div>
+                          {canEdit ? (
+                            <div className="flex justify-end gap-2">
+                              <button onClick={() => openInvoiceEdit(inv)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-text hover:bg-slate-100">Düzenle</button>
+                              {inv.status !== 'CANCELLED' && <button onClick={() => cancelInvoice(inv.id)} className="rounded-md bg-danger px-2.5 py-1 text-xs text-white hover:bg-danger/90">İptal</button>}
+                            </div>
+                          ) : (
+                            <span className="block text-right text-xs text-muted">—</span>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -251,10 +260,14 @@ export default function RestaurantAccountsPage() {
                         <td className="px-4 py-2 text-muted">{p.method ?? '—'}</td>
                         <td className="px-4 py-2"><StatusPill status={p.status} /></td>
                         <td className="px-4 py-2">
-                          <div className="flex justify-end gap-2">
-                            <button onClick={() => openPaymentEdit(p)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-text hover:bg-slate-100">Düzenle</button>
-                            {p.status !== 'CANCELLED' && <button onClick={() => cancelPayment(p.id)} className="rounded-md bg-danger px-2.5 py-1 text-xs text-white hover:bg-danger/90">İptal</button>}
-                          </div>
+                          {canEdit ? (
+                            <div className="flex justify-end gap-2">
+                              <button onClick={() => openPaymentEdit(p)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-text hover:bg-slate-100">Düzenle</button>
+                              {p.status !== 'CANCELLED' && <button onClick={() => cancelPayment(p.id)} className="rounded-md bg-danger px-2.5 py-1 text-xs text-white hover:bg-danger/90">İptal</button>}
+                            </div>
+                          ) : (
+                            <span className="block text-right text-xs text-muted">—</span>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -266,17 +279,18 @@ export default function RestaurantAccountsPage() {
               <Section title="İlgili Onaylı Vardiyalar">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-slate-200 bg-slate-50 text-left text-muted">
-                    <th className="px-4 py-2 font-medium">Tarih</th><th className="px-4 py-2 font-medium">Kurye</th><th className="px-4 py-2 font-medium">Saat</th><th className="px-4 py-2 font-medium">Hizmet Bedeli</th>
+                    <th className="px-4 py-2 font-medium">Tarih</th><th className="px-4 py-2 font-medium">Kurye</th><th className="px-4 py-2 font-medium">Saat</th><th className="px-4 py-2 font-medium">Hizmet Bedeli</th><th className="px-4 py-2 font-medium">Kurye Alacağı</th>
                   </tr></thead>
                   <tbody>
                     {detail.shifts.length === 0 ? (
-                      <tr><td colSpan={4} className="px-4 py-6 text-center text-muted">Onaylı vardiya yok.</td></tr>
+                      <tr><td colSpan={5} className="px-4 py-6 text-center text-muted">Onaylı vardiya yok.</td></tr>
                     ) : detail.shifts.map((s) => (
                       <tr key={s.id} className="border-b border-slate-100 last:border-0">
                         <td className="px-4 py-2 text-text">{formatDateTR(s.date)}</td>
                         <td className="px-4 py-2 text-muted">{s.courierName}</td>
                         <td className="px-4 py-2 text-muted">{s.workHours} sa</td>
                         <td className="px-4 py-2 text-text">{formatTL(s.serviceAmount)}</td>
+                        <td className="px-4 py-2 text-text">{s.courierEarning != null ? formatTL(s.courierEarning) : '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -331,6 +345,19 @@ export default function RestaurantAccountsPage() {
       </Modal>
     </AdminLayout>
   );
+}
+
+/** Borç durumuna göre rozet metni: borçlu / fazla ödeme / ödendi. */
+function balanceLabel(balance: number): string {
+  if (balance > 0) return 'Borçlu';
+  if (balance < 0) return 'Fazla Ödeme';
+  return 'Ödendi';
+}
+
+function balanceStyle(balance: number): string {
+  if (balance > 0) return 'bg-danger/10 text-danger';
+  if (balance < 0) return 'bg-amber-100 text-amber-700';
+  return 'bg-success/10 text-success';
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

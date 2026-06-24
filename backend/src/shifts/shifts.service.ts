@@ -6,16 +6,35 @@ import {
 } from '@nestjs/common';
 import { Prisma, ShiftConfirmationStatus, ShiftStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { durationHours, round2, timesDiffer } from '../common/time.util';
+import {
+  durationHours,
+  lateMinutes,
+  round2,
+  splitNormalOvertime,
+  timesDiffer,
+} from '../common/time.util';
 import { CreateShiftDto } from './dto/create-shift.dto';
 import { UpdateShiftDto } from './dto/update-shift.dto';
 import { ApproveTimeDto } from './dto/approve-time.dto';
 import { ReportTimeDto } from './dto/report-time.dto';
+import { SwitchRestaurantDto } from './dto/switch-restaurant.dto';
 import { PartyShiftQueryDto, ShiftQueryDto } from './dto/shift-query.dto';
 
 const shiftInclude = {
   restaurant: { select: { id: true, name: true, isActive: true } },
-  courier: { select: { id: true, name: true, isActive: true } },
+  courier: {
+    select: {
+      id: true,
+      name: true,
+      isActive: true,
+      plate: true,
+      user: { select: { username: true } },
+    },
+  },
+  segments: {
+    orderBy: { sequence: 'asc' },
+    include: { restaurant: { select: { id: true, name: true } } },
+  },
 } satisfies Prisma.ShiftInclude;
 
 type ShiftWithRefs = Prisma.ShiftGetPayload<{ include: typeof shiftInclude }>;
@@ -80,6 +99,58 @@ export class ShiftsService {
     return { confirmationStatus: ShiftConfirmationStatus.WAITING, status: shift.status };
   }
 
+  /**
+   * Derives late-start and normal/overtime breakdown for a shift. The "actual"
+   * times are the admin-approved times when present, otherwise the courier's
+   * own reported times (so the shift screen can flag lateness before approval).
+   */
+  private deriveTimes(shift: {
+    plannedStartTime: string;
+    plannedEndTime: string;
+    approvedStartTime: string | null;
+    approvedEndTime: string | null;
+    courierReportedStartTime: string | null;
+    courierReportedEndTime: string | null;
+  }) {
+    const actualStartTime = shift.approvedStartTime ?? shift.courierReportedStartTime ?? null;
+    const actualEndTime = shift.approvedEndTime ?? shift.courierReportedEndTime ?? null;
+
+    // Lateness reflects when the courier actually started (their own reported
+    // time). Approving a clean start time for payment must not erase the late
+    // flag, so the courier's report takes priority for the late calculation.
+    const late = lateMinutes(shift.plannedStartTime, shift.courierReportedStartTime ?? actualStartTime);
+    let normalHours: number | null = null;
+    let overtimeHours: number | null = null;
+    let totalHours: number | null = null;
+    if (actualStartTime && actualEndTime) {
+      const split = splitNormalOvertime(shift.plannedEndTime, actualStartTime, actualEndTime);
+      normalHours = split.normalHours;
+      overtimeHours = split.overtimeHours;
+      totalHours = split.totalHours;
+    }
+
+    return {
+      actualStartTime,
+      actualEndTime,
+      lateMinutes: late,
+      isLate: late > 0,
+      normalHours,
+      overtimeHours,
+      totalHours,
+    };
+  }
+
+  private serializeSegments(shift: ShiftWithRefs) {
+    return shift.segments.map((seg) => ({
+      id: seg.id,
+      restaurantId: seg.restaurantId,
+      restaurantName: seg.restaurant.name,
+      startTime: seg.startTime,
+      endTime: seg.endTime,
+      sequence: seg.sequence,
+    }));
+  }
+
   /** Adds a simple derived calculation (only when approved times exist). */
   private serializeAdmin(shift: ShiftWithRefs) {
     let calculation: {
@@ -103,12 +174,16 @@ export class ShiftsService {
       };
     }
 
+    const derived = this.deriveTimes(shift);
+
     return {
       id: shift.id,
       restaurantId: shift.restaurantId,
       courierId: shift.courierId,
       restaurantName: shift.restaurant.name,
       courierName: shift.courier.name,
+      courierUsername: shift.courier.user?.username ?? null,
+      courierPlate: shift.courier.plate,
       date: shift.date,
       plannedStartTime: shift.plannedStartTime,
       plannedEndTime: shift.plannedEndTime,
@@ -122,6 +197,8 @@ export class ShiftsService {
       courierReportedEndTime: shift.courierReportedEndTime,
       approvedStartTime: shift.approvedStartTime,
       approvedEndTime: shift.approvedEndTime,
+      ...derived,
+      segments: this.serializeSegments(shift),
       status: shift.status,
       confirmationStatus: shift.confirmationStatus,
       note: shift.note,
@@ -322,6 +399,22 @@ export class ShiftsService {
     }
     this.assertTimeOrder(dto.approvedStartTime, dto.approvedEndTime, 'Onaylı');
 
+    // Reconcile segments with the approved times: the first segment was anchored
+    // to the planned/reported start when the switch happened, but the approved
+    // start is the source of truth. Aligning it keeps the per-restaurant hours
+    // consistent with the courier's total worked time. The open (last) segment
+    // is implicitly closed at the approved end by the revenue helper.
+    if (existing.segments.length > 0) {
+      const sorted = [...existing.segments].sort((a, b) => a.sequence - b.sequence);
+      const first = sorted[0];
+      if (first.startTime !== dto.approvedStartTime) {
+        await this.prisma.shiftSegment.update({
+          where: { id: first.id },
+          data: { startTime: dto.approvedStartTime },
+        });
+      }
+    }
+
     const updated = await this.prisma.shift.update({
       where: { id },
       data: {
@@ -336,6 +429,86 @@ export class ShiftsService {
     return this.serializeAdmin(updated as ShiftWithRefs);
   }
 
+  /**
+   * Moves the courier to another restaurant mid-shift. The shift is kept as a
+   * single record; the work is split into ShiftSegment intervals. The currently
+   * open interval is closed at `switchTime`, then a new open interval at the new
+   * restaurant is started. Historical (single-restaurant) shifts are unaffected
+   * until the first switch happens.
+   */
+  async adminSwitchRestaurant(id: string, dto: SwitchRestaurantDto) {
+    const shift = await this.findRaw(id);
+
+    if (shift.status === ShiftStatus.CANCELLED) {
+      throw new BadRequestException('İptal edilmiş vardiyada restoran değişimi yapılamaz.');
+    }
+
+    const newRestaurant = await this.prisma.restaurant.findUnique({
+      where: { id: dto.newRestaurantId },
+    });
+    if (!newRestaurant) throw new NotFoundException('Restoran bulunamadı.');
+    if (!newRestaurant.isActive) throw new BadRequestException('Pasif restoran vardiyaya atanamaz.');
+
+    const segments = [...shift.segments].sort((a, b) => a.sequence - b.sequence);
+    const openSegment = segments.find((s) => s.endTime === null) ?? null;
+
+    // The restaurant the courier is currently working at.
+    const currentRestaurantId = openSegment ? openSegment.restaurantId : shift.restaurantId;
+    if (currentRestaurantId === dto.newRestaurantId) {
+      throw new BadRequestException('Kurye zaten bu restoranda çalışıyor.');
+    }
+
+    // Anchor of the current open interval.
+    const currentStart = openSegment
+      ? openSegment.startTime
+      : shift.approvedStartTime ?? shift.courierReportedStartTime ?? shift.plannedStartTime;
+    this.assertTimeOrder(currentStart, dto.switchTime, 'Geçiş');
+
+    const nextSequence = segments.length > 0 ? segments[segments.length - 1].sequence + 1 : 1;
+
+    await this.prisma.$transaction(async (tx) => {
+      if (openSegment) {
+        // Close the open interval.
+        await tx.shiftSegment.update({
+          where: { id: openSegment.id },
+          data: { endTime: dto.switchTime },
+        });
+      } else {
+        // First switch: materialise the original restaurant as segment 0.
+        await tx.shiftSegment.create({
+          data: {
+            shiftId: shift.id,
+            restaurantId: shift.restaurantId,
+            restaurantHourlyRateSnapshot: shift.restaurantHourlyRateSnapshot,
+            startTime: currentStart,
+            endTime: dto.switchTime,
+            sequence: 0,
+          },
+        });
+      }
+      // Open the new interval at the new restaurant.
+      await tx.shiftSegment.create({
+        data: {
+          shiftId: shift.id,
+          restaurantId: newRestaurant.id,
+          restaurantHourlyRateSnapshot: newRestaurant.hourlyRate,
+          startTime: dto.switchTime,
+          endTime: null,
+          sequence: nextSequence,
+        },
+      });
+      // A switch means the shift is actively being worked.
+      if (shift.status === ShiftStatus.PLANNED) {
+        await tx.shift.update({
+          where: { id: shift.id },
+          data: { status: ShiftStatus.IN_PROGRESS },
+        });
+      }
+    });
+
+    return this.serializeAdmin(await this.findRaw(id));
+  }
+
   // ---------------------------------------------------------------- RESTAURANT
 
   private async restaurantIdForUser(userId: string): Promise<string> {
@@ -346,8 +519,12 @@ export class ShiftsService {
 
   async restaurantFindAll(userId: string, query: PartyShiftQueryDto) {
     const restaurantId = await this.restaurantIdForUser(userId);
+    // Include shifts where this restaurant is the primary one OR where the
+    // courier switched into this restaurant for part of the shift (a segment).
     const shifts = await this.prisma.shift.findMany({
-      where: this.buildWhere(query, { restaurantId }),
+      where: this.buildWhere(query, {
+        OR: [{ restaurantId }, { segments: { some: { restaurantId } } }],
+      }),
       include: shiftInclude,
       orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
     });
@@ -357,19 +534,15 @@ export class ShiftsService {
   async restaurantFindOne(userId: string, id: string) {
     const restaurantId = await this.restaurantIdForUser(userId);
     const shift = await this.findRaw(id);
-    if (shift.restaurantId !== restaurantId) {
+    // A restaurant may view a shift where it is the primary restaurant OR where
+    // the courier worked part of the shift at this restaurant (a segment).
+    const involved =
+      shift.restaurantId === restaurantId ||
+      shift.segments.some((seg) => seg.restaurantId === restaurantId);
+    if (!involved) {
       throw new ForbiddenException('Bu vardiyaya erişim yetkiniz yok.');
     }
     return this.serializeParty(shift, 'restaurant');
-  }
-
-  async restaurantReportTime(userId: string, id: string, dto: ReportTimeDto) {
-    const restaurantId = await this.restaurantIdForUser(userId);
-    const shift = await this.findRaw(id);
-    if (shift.restaurantId !== restaurantId) {
-      throw new ForbiddenException('Bu vardiyaya erişim yetkiniz yok.');
-    }
-    return this.applyReport(shift, 'restaurant', dto);
   }
 
   // ---------------------------------------------------------------- COURIER
