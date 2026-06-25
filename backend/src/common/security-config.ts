@@ -8,27 +8,33 @@ export function requireJwtSecret(config: ConfigService): string {
   return secret;
 }
 
-export function resolveCorsOrigins(config: ConfigService): string[] {
-  const configured = config
-    .get<string>('CORS_ORIGINS')
-    ?.split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+// The site's own domain (frontend hosted here, calling the Railway API).
+// Always allowed in production so the live site works even if the CORS_ORIGINS
+// env var is missing; extra origins can still be added via CORS_ORIGINS.
+const PRODUCTION_ORIGINS = [
+  'https://geliyokuryehizmetleri.com',
+  'https://www.geliyokuryehizmetleri.com',
+];
 
-  if (configured?.length && !configured.some((origin) => /change_me/i.test(origin))) {
-    return configured;
-  }
+export function resolveCorsOrigins(config: ConfigService): string[] {
+  const configured = (config.get<string>('CORS_ORIGINS')?.split(',') ?? [])
+    .map((origin) => origin.trim())
+    .filter((origin) => origin && !/change_me/i.test(origin));
 
   const environment = config.get<string>('APP_ENV') ?? config.get<string>('NODE_ENV');
   if (environment === 'production') {
-    throw new Error('Production ortamında CORS_ORIGINS tanımlanmalıdır.');
+    // Known production domain(s) + any extras configured via CORS_ORIGINS.
+    return [...new Set([...PRODUCTION_ORIGINS, ...configured])];
   }
 
-  // Vite increments to 5174 when 5173 is already occupied during local work.
+  // Local development: Vite dev server (5173/5174) plus any configured extras.
   return [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://localhost:5174',
-    'http://127.0.0.1:5174',
+    ...new Set([
+      ...configured,
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'http://localhost:5174',
+      'http://127.0.0.1:5174',
+    ]),
   ];
 }

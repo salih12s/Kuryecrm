@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /c/Users/salih/Desktop/KuryeCrm/backend && npx tsc --noEmit 2>&1 | head -10 && echo \"=== other hardcoded old-domain refs? ===\" && grep -rn \"kuryecrm-production\\\\|tests.salihaydm\\\\|salihaydm\" ../frontend/src ../frontend/.env.production src 2>/dev/null || echo \"none in source\")",
+      "Read(//c/Users/salih/Desktop/frontend/**)"
+    ]
+  }
+}
