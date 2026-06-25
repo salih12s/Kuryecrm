@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
@@ -18,14 +18,14 @@ export class AdminAccountsController {
   }
 
   @Get('restaurants/:id/account-summary')
-  restaurantSummary(@Param('id') id: string) {
+  restaurantSummary(@Param('id') id: string, @Query('from') from?: string, @Query('to') to?: string) {
     // Admin/partner view includes the courier earning per shift.
-    return this.accounting.restaurantSummary(id, true);
+    return this.accounting.restaurantSummary(id, true, from, to);
   }
 
   // Backing list for the admin "Restoran Cari" page.
   @Get('restaurant-accounts')
-  restaurantAccounts() {
-    return this.accounting.restaurantAccountsList();
+  restaurantAccounts(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.accounting.restaurantAccountsList(from, to);
   }
 }

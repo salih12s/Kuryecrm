@@ -3,6 +3,7 @@ import AdminLayout from '../../components/admin/AdminLayout';
 import MiniBars from '../../components/reports/MiniBars';
 import ReportActions from '../../components/reports/ReportActions';
 import ReportSummaryCards from '../../components/reports/ReportSummaryCards';
+import ReportShiftTable from '../../components/reports/ReportShiftTable';
 import { exportCsv } from '../../lib/exportCsv';
 import { formatDateTR, formatTL } from '../../lib/format';
 import { reportsApi } from '../../lib/reportsApi';
@@ -106,9 +107,10 @@ export default function RangeReportPage() {
     {loading && <p className="py-12 text-center text-muted">Rapor hazırlanıyor...</p>}
     {data && !loading && <div className="space-y-6">
       <ReportSummaryCards summary={data.summary} />
+      {/* Only days with activity, so the charts stay compact. */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <MiniBars title="Günlük Net Kâr" money rows={data.dailyBreakdown.map((day) => ({ label: formatDateTR(day.date), value: day.operationalNetProfit }))} />
-        <MiniBars title="Günlük Çalışma Saati" rows={data.dailyBreakdown.map((day) => ({ label: formatDateTR(day.date), value: day.totalWorkHours }))} />
+        <MiniBars title="Günlük Net Kâr" money rows={data.dailyBreakdown.filter((day) => day.operationalNetProfit !== 0).map((day) => ({ label: formatDateTR(day.date), value: day.operationalNetProfit }))} />
+        <MiniBars title="Günlük Çalışma Saati" rows={data.dailyBreakdown.filter((day) => day.totalWorkHours > 0).map((day) => ({ label: formatDateTR(day.date), value: day.totalWorkHours }))} />
       </div>
       <Table
         title="Gün Gün Kırılım"
@@ -128,6 +130,7 @@ export default function RangeReportPage() {
         <Table title="Restoran Kırılımı" heads={['Restoran', 'Vardiya', 'Saat', 'Hizmet']} rows={data.restaurantBreakdown.map((row) => [row.name, row.shiftCount, `${row.workHours} sa`, formatTL(row.amount)])} />
         <Table title="Kurye Kırılımı" heads={['Kurye', 'Vardiya', 'Saat', 'Hak Ediş']} rows={data.courierBreakdown.map((row) => [row.name, row.shiftCount, `${row.workHours} sa`, formatTL(row.amount)])} />
       </div>
+      <ReportShiftTable shifts={data.shifts} />
     </div>}
   </AdminLayout>;
 }

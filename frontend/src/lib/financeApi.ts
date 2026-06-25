@@ -82,10 +82,10 @@ export const courierPaymentsApi = {
 export const accountsApi = {
   courierSummary: async (id: string) =>
     (await api.get<CourierAccountSummary>(`/admin/couriers/${id}/account-summary`)).data,
-  restaurantSummary: async (id: string) =>
-    (await api.get<RestaurantAccountSummary>(`/admin/restaurants/${id}/account-summary`)).data,
-  restaurantAccounts: async () =>
-    (await api.get<RestaurantAccountListItem[]>('/admin/restaurant-accounts')).data,
+  restaurantSummary: async (id: string, params: { from?: string; to?: string } = {}) =>
+    (await api.get<RestaurantAccountSummary>(`/admin/restaurants/${id}/account-summary`, { params: clean(params) })).data,
+  restaurantAccounts: async (params: { from?: string; to?: string } = {}) =>
+    (await api.get<RestaurantAccountListItem[]>('/admin/restaurant-accounts', { params: clean(params) })).data,
 };
 
 // ---------------- Panel (restaurant / courier own) ----------------

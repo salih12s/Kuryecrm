@@ -32,21 +32,38 @@ export default function RestaurantAccountsPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Optional date range. Empty = all-time.
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const range = () => ({ from: from || undefined, to: to || undefined });
+
   const loadList = async () => {
     setLoadingList(true);
     try {
-      setList(await accountsApi.restaurantAccounts());
+      setList(await accountsApi.restaurantAccounts(range()));
     } finally {
       setLoadingList(false);
     }
   };
   const loadDetail = async (id: string) => {
-    setDetail(await accountsApi.restaurantSummary(id));
+    setDetail(await accountsApi.restaurantSummary(id, range()));
   };
 
   useEffect(() => {
     loadList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const applyRange = async () => {
+    await loadList();
+    if (selectedId) await loadDetail(selectedId);
+  };
+  const clearRange = async () => {
+    setFrom('');
+    setTo('');
+    setList(await accountsApi.restaurantAccounts());
+    if (selectedId) setDetail(await accountsApi.restaurantSummary(selectedId));
+  };
 
   const select = async (id: string) => {
     setSelectedId(id);
@@ -146,6 +163,20 @@ export default function RestaurantAccountsPage() {
           Her restoranın hizmet bedeli (onaylı vardiyalardan), yaptığı ödemeler ve kalan borcu.
           <span className="font-medium text-text"> Kalan Borç = Hizmet Bedeli − Ödenen.</span>
         </p>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted">Başlangıç</span>
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-accent" />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted">Bitiş</span>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-accent" />
+        </label>
+        <button onClick={() => void applyRange()} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90">Getir</button>
+        <button onClick={() => void clearRange()} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-text hover:bg-slate-100">Tümü</button>
+        <span className="text-xs text-muted">{from || to ? 'Seçilen aralıktaki hizmet ve ödemeler gösteriliyor.' : 'Tüm zamanlar gösteriliyor.'}</span>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm">

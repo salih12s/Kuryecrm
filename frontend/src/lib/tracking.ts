@@ -37,3 +37,16 @@ export const trackingApi = {
 export const liveMapApi = {
   get: async () => (await api.get<LiveMapData>('/admin/live-map')).data,
 };
+
+export interface ShiftLocationPoint {
+  id: string;
+  latitude: number;
+  longitude: number;
+  recordedAt: string;
+}
+
+export const adminTrackingApi = {
+  /** GPS trail recorded for a shift (admin/şef), used to resolve time disputes. */
+  shiftLocations: async (id: string) =>
+    (await api.get<ShiftLocationPoint[]>(`/admin/shifts/${id}/locations`)).data,
+};

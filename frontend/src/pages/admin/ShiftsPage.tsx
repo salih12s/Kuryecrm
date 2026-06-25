@@ -4,6 +4,9 @@ import AdminLayout from '../../components/admin/AdminLayout';
 import Modal from '../../components/Modal';
 import Field from '../../components/admin/Field';
 import { ShiftStatusBadge, ConfirmationBadge } from '../../components/admin/ShiftBadges';
+import KebabMenu, { KebabItem } from '../../components/admin/KebabMenu';
+import DayTabs from '../../components/admin/DayTabs';
+import { adminTrackingApi } from '../../lib/tracking';
 import { adminShiftsApi, type ShiftFilters } from '../../lib/shiftsApi';
 import { restaurantsApi, couriersApi } from '../../lib/adminApi';
 import { formatDateTR, timeRange } from '../../lib/format';
@@ -64,6 +67,8 @@ export default function ShiftsPage() {
   const [approveTarget, setApproveTarget] = useState<Shift | null>(null);
   const [approveForm, setApproveForm] = useState({ start: '', end: '', adminNote: '' });
   const [approveError, setApproveError] = useState<string | null>(null);
+  // GPS-derived first/last ping for the shift, used to settle time disputes.
+  const [trackedTimes, setTrackedTimes] = useState<{ start: string; end: string } | null>(null);
 
   // switch-restaurant modal (mid-shift restaurant change)
   const [switchOpen, setSwitchOpen] = useState(false);
@@ -166,13 +171,31 @@ export default function ShiftsPage() {
 
   const openApprove = (s: Shift) => {
     setApproveTarget(s);
-    setApproveForm({
-      start: s.approvedStartTime ?? s.restaurantReportedStartTime ?? s.plannedStartTime,
-      end: s.approvedEndTime ?? s.restaurantReportedEndTime ?? s.plannedEndTime,
-      adminNote: s.adminNote ?? '',
-    });
+    // Prefill from the parties' reported times so extra overtime is captured.
+    // For the end time take the later of the two reports (the extra one).
+    const start = s.approvedStartTime ?? s.courierReportedStartTime ?? s.restaurantReportedStartTime ?? s.plannedStartTime;
+    const end = s.approvedEndTime
+      ?? laterTime(s.courierReportedEndTime, s.restaurantReportedEndTime)
+      ?? s.plannedEndTime;
+    setApproveForm({ start, end, adminNote: s.adminNote ?? '' });
     setApproveError(null);
+    setTrackedTimes(null);
     setApproveOpen(true);
+    void loadTracked(s.id);
+  };
+
+  // Reads the shift's GPS trail and derives the real first/last activity time.
+  const loadTracked = async (id: string) => {
+    try {
+      const points = await adminTrackingApi.shiftLocations(id);
+      if (points.length === 0) return;
+      const times = points.map((p) => new Date(p.recordedAt).getTime());
+      const minIso = points[times.indexOf(Math.min(...times))].recordedAt;
+      const maxIso = points[times.indexOf(Math.max(...times))].recordedAt;
+      setTrackedTimes({ start: toIstanbulHHmm(minIso), end: toIstanbulHHmm(maxIso) });
+    } catch {
+      // Tracking is best-effort; ignore if unavailable.
+    }
   };
 
   const submitApprove = async (e: FormEvent) => {
@@ -294,6 +317,12 @@ export default function ShiftsPage() {
         </div>
       </div>
 
+      {/* Day tabs: quick single-day filter for the chosen month. */}
+      <DayTabs
+        selected={filters.dateFrom && filters.dateFrom === filters.dateTo ? filters.dateFrom : null}
+        onSelect={(day) => setFilters({ ...filters, dateFrom: day ?? undefined, dateTo: day ?? undefined })}
+      />
+
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm">
         <div className="overflow-x-auto">
@@ -334,7 +363,15 @@ export default function ShiftsPage() {
                         </div>
                       )}
                     </td>
-                    <td className="px-2.5 py-2 text-text">{s.courierName}</td>
+                    <td className="px-2.5 py-2 text-text">
+                      {s.courierName}
+                      {(s.note || s.adminNote) && (
+                        <div className="mt-1 space-y-0.5">
+                          {s.note && <div className="text-[11px] text-muted">📝 {s.note}</div>}
+                          {s.adminNote && <div className="text-[11px] text-amber-700">Yönetici: {s.adminNote}</div>}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-2.5 py-2 text-muted">{timeRange(s.plannedStartTime, s.plannedEndTime)}</td>
                     <td className="px-2.5 py-2 text-muted">{timeRange(s.extraStartTime, s.extraEndTime)}</td>
                     <td className="px-2.5 py-2 text-muted">{timeRange(s.courierReportedStartTime, s.courierReportedEndTime)}</td>
@@ -342,29 +379,18 @@ export default function ShiftsPage() {
                     <td className="px-2.5 py-2"><LateOvertimeCell shift={s} /></td>
                     <td className="px-2.5 py-2"><ShiftStatusBadge status={s.status} /></td>
                     <td className="px-2.5 py-2"><ConfirmationBadge status={s.confirmationStatus} /></td>
-                    <td className="px-2.5 py-2">
-                      <div className="flex flex-wrap justify-end gap-1.5">
-                        <button onClick={() => openEdit(s)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-text hover:bg-slate-100">Düzenle</button>
-                        <button
-                          onClick={() => openSwitch(s)}
-                          disabled={s.status === 'CANCELLED'}
-                          className="rounded-md border border-accent px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
-                        >
-                          Restoran Değiştir
-                        </button>
-                        <button onClick={() => openApprove(s)} className="rounded-md bg-success px-2.5 py-1 text-xs font-medium text-white hover:bg-success/90">Saat Onayla</button>
-                        <select
-                          value={s.status}
-                          onChange={(e) => changeStatus(s, e.target.value as ShiftStatus)}
-                          className="rounded-md border border-slate-200 px-1.5 py-1 text-xs text-text"
-                          title="Durum değiştir"
-                        >
-                          {STATUS_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
-                          ))}
-                        </select>
-                        <button onClick={() => cancelShift(s)} className="rounded-md bg-danger px-2.5 py-1 text-xs font-medium text-white hover:bg-danger/90">İptal</button>
-                      </div>
+                    <td className="px-2.5 py-2 text-right">
+                      <KebabMenu>
+                        <KebabItem onClick={() => openApprove(s)} tone="success">Saat Onayla</KebabItem>
+                        <KebabItem onClick={() => openEdit(s)}>Düzenle</KebabItem>
+                        <KebabItem onClick={() => openSwitch(s)} disabled={s.status === 'CANCELLED'}>Restoran Değiştir</KebabItem>
+                        <div className="my-1 border-t border-slate-100" />
+                        <KebabItem onClick={() => changeStatus(s, 'PLANNED')} disabled={s.status === 'PLANNED'}>Planlandı işaretle</KebabItem>
+                        <KebabItem onClick={() => changeStatus(s, 'IN_PROGRESS')} disabled={s.status === 'IN_PROGRESS'}>Devam Ediyor işaretle</KebabItem>
+                        <KebabItem onClick={() => changeStatus(s, 'DISPUTED')} disabled={s.status === 'DISPUTED'}>Uyuşmazlık işaretle</KebabItem>
+                        <div className="my-1 border-t border-slate-100" />
+                        <KebabItem onClick={() => cancelShift(s)} tone="danger" disabled={s.status === 'CANCELLED'}>İptal Et</KebabItem>
+                      </KebabMenu>
                     </td>
                   </tr>
                 ))
@@ -432,6 +458,19 @@ export default function ShiftsPage() {
               <p><b>Restoran bildirimi:</b> {timeRange(approveTarget.restaurantReportedStartTime, approveTarget.restaurantReportedEndTime)}</p>
               <p><b>Kurye bildirimi:</b> {timeRange(approveTarget.courierReportedStartTime, approveTarget.courierReportedEndTime)}</p>
             </div>
+            {trackedTimes && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+                <p className="font-semibold">📍 GPS takibine göre (tarafsız kayıt)</p>
+                <p className="mt-0.5">İlk konum: <b>{trackedTimes.start}</b> · Son konum: <b>{trackedTimes.end}</b></p>
+                <button
+                  type="button"
+                  onClick={() => setApproveForm((f) => ({ ...f, start: trackedTimes.start, end: trackedTimes.end }))}
+                  className="mt-2 rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-700"
+                >
+                  GPS saatlerini kullan
+                </button>
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Onaylı Başlangıç" type="time" required value={approveForm.start} onChange={(e) => setApproveForm({ ...approveForm, start: e.target.value })} />
               <Field label="Onaylı Bitiş" type="time" required value={approveForm.end} onChange={(e) => setApproveForm({ ...approveForm, end: e.target.value })} />
@@ -523,6 +562,22 @@ function FilterField({ label, children }: { label: string; children: React.React
       {children}
     </label>
   );
+}
+
+/** Formats an ISO timestamp as "HH:mm" in the operation timezone. */
+function toIstanbulHHmm(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-GB', {
+    timeZone: 'Europe/Istanbul',
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/** Returns the later of two "HH:mm" times (ignores nulls). */
+function laterTime(a: string | null, b: string | null): string | null {
+  if (a && b) return a >= b ? a : b;
+  return a ?? b;
 }
 
 function extractError(err: unknown): string {

@@ -212,6 +212,8 @@ export interface CourierAccountSummary {
     workHours: number;
     hourlyRate: string;
     earning: number;
+    /** Per-restaurant split, present only when the shift spanned more than one. */
+    restaurants?: { restaurantName: string; startTime: string | null; endTime: string | null; hours: number; earning: number }[];
   }[];
   advances: {
     id: string;
@@ -378,6 +380,7 @@ export interface RangeReport {
   startDate: string; endDate: string; summary: ReportSummary;
   dailyBreakdown: ({ date: string } & ReportSummary)[];
   restaurantBreakdown: ReportBreakdown[]; courierBreakdown: ReportBreakdown[];
+  shifts: ReportShift[];
 }
 
 export interface RestaurantReportRow {

@@ -89,3 +89,21 @@ export function shiftServiceAmountForRestaurant(shift: ShiftLike, restaurantId: 
   const row = restaurantRevenueBreakdown(shift).find((r) => r.restaurantId === restaurantId);
   return { hours: row?.hours ?? 0, amount: row?.amount ?? 0 };
 }
+
+/**
+ * The actual worked time interval at one restaurant within a shift. For a
+ * single-restaurant shift this is the whole approved window; for a shift split
+ * across restaurants it is that restaurant's segment range (the open segment is
+ * closed at the shift's approved end).
+ */
+export function restaurantTimeRange(shift: ShiftLike, restaurantId: string): { start: string | null; end: string | null } {
+  const segments = (shift.segments ?? []).slice().sort((a, b) => a.sequence - b.sequence);
+  if (segments.length === 0) {
+    return shift.restaurantId === restaurantId
+      ? { start: shift.approvedStartTime, end: shift.approvedEndTime }
+      : { start: null, end: null };
+  }
+  const mine = segments.filter((s) => s.restaurantId === restaurantId);
+  if (mine.length === 0) return { start: null, end: null };
+  return { start: mine[0].startTime, end: mine[mine.length - 1].endTime ?? shift.approvedEndTime };
+}

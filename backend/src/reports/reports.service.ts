@@ -254,6 +254,8 @@ export class ReportsService {
       dailyBreakdown: [...dayMap.entries()].reverse().map(([date, values]) => ({ date, ...values })),
       restaurantBreakdown: this.groupShifts(report.shifts, 'restaurant'),
       courierBreakdown: this.groupShifts(report.shifts, 'courier'),
+      // Per-shift detail so the period report can show everything (incl. switches).
+      shifts: report.shifts,
     };
   }
 

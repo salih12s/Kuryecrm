@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import StatCard from '../StatCard';
 import { StatusPill } from '../admin/FinanceBadges';
 import { formatTL, formatDateTR, timeRange } from '../../lib/format';
@@ -23,16 +24,31 @@ export default function CourierAccountView({ data }: { data: CourierAccountSumma
           <tbody>
             {data.shifts.length === 0 ? (
               <tr><td colSpan={6} className="px-4 py-6 text-center text-muted">Onaylı vardiya yok.</td></tr>
-            ) : data.shifts.map((s) => (
-              <tr key={s.id} className="border-b border-slate-100 last:border-0">
-                <td className="px-4 py-2 text-text">{formatDateTR(s.date)}</td>
-                <td className="px-4 py-2 text-muted">{s.restaurantName}</td>
-                <td className="px-4 py-2 text-muted">{timeRange(s.approvedStartTime, s.approvedEndTime)}</td>
-                <td className="px-4 py-2 text-muted">{s.workHours} sa</td>
-                <td className="px-4 py-2 text-muted">{formatTL(s.hourlyRate)}</td>
-                <td className="px-4 py-2 text-text">{formatTL(s.earning)}</td>
-              </tr>
-            ))}
+            ) : data.shifts.map((s) => {
+              const split = s.restaurants && s.restaurants.length > 0;
+              return (
+              <Fragment key={s.id}>
+                <tr className="border-b border-slate-100">
+                  <td className="px-4 py-2 text-text">{formatDateTR(s.date)}</td>
+                  <td className="px-4 py-2 text-muted">{split ? 'Birden fazla restoran' : s.restaurantName}</td>
+                  <td className="px-4 py-2 text-muted">{timeRange(s.approvedStartTime, s.approvedEndTime)}</td>
+                  <td className="px-4 py-2 text-muted">{s.workHours} sa</td>
+                  <td className="px-4 py-2 text-muted">{formatTL(s.hourlyRate)}</td>
+                  <td className="px-4 py-2 text-text">{formatTL(s.earning)}</td>
+                </tr>
+                {split && s.restaurants!.map((r, i) => (
+                  <tr key={`${s.id}-${i}`} className="border-b border-slate-100 bg-slate-50/60 last:border-0">
+                    <td className="px-4 py-1.5"></td>
+                    <td className="px-4 py-1.5 pl-8 text-[12px] text-muted">↳ {r.restaurantName}</td>
+                    <td className="px-4 py-1.5 text-[12px] text-muted">{timeRange(r.startTime, r.endTime)}</td>
+                    <td className="px-4 py-1.5 text-[12px] text-muted">{r.hours} sa</td>
+                    <td className="px-4 py-1.5"></td>
+                    <td className="px-4 py-1.5 text-[12px] text-text">{formatTL(r.earning)}</td>
+                  </tr>
+                ))}
+              </Fragment>
+            );
+            })}
           </tbody>
         </table>
       </Section>

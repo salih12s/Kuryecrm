@@ -10,7 +10,19 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { durationHours, round2 } from '../common/time.util';
-import { restaurantRevenueBreakdown, shiftServiceAmountForRestaurant } from '../common/shift-calc.util';
+import { restaurantRevenueBreakdown, restaurantTimeRange, shiftServiceAmountForRestaurant } from '../common/shift-calc.util';
+
+/** Optional inclusive date-range filter on a shift's `date` field. */
+function dateFilter(from?: string, to?: string): Prisma.ShiftWhereInput {
+  if (!from && !to) return {};
+  return { date: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } };
+}
+
+/** Optional inclusive date-range filter on a payment's `paymentDate` field. */
+function paymentDateFilter(from?: string, to?: string): { paymentDate?: { gte?: string; lte?: string } } {
+  if (!from && !to) return {};
+  return { paymentDate: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } };
+}
 
 /** Only fully-approved shifts feed the money calculations. */
 const APPROVED_WHERE = {
@@ -36,7 +48,10 @@ export class AccountingService {
 
     const shifts = await this.prisma.shift.findMany({
       where: { courierId, ...APPROVED_WHERE },
-      include: { restaurant: { select: { name: true } } },
+      include: {
+        restaurant: { select: { id: true, name: true } },
+        segments: { include: { restaurant: { select: { id: true, name: true } } }, orderBy: { sequence: 'asc' } },
+      },
       orderBy: [{ date: 'desc' }],
     });
 
@@ -44,9 +59,26 @@ export class AccountingService {
     let totalEarnings = 0;
     const shiftItems = shifts.map((s) => {
       const hours = durationHours(s.approvedStartTime as string, s.approvedEndTime as string);
-      const earning = hours * Number(s.courierHourlyRateSnapshot);
+      const rate = Number(s.courierHourlyRateSnapshot);
+      const earning = hours * rate;
       totalWorkHours += hours;
       totalEarnings += earning;
+      // Per-restaurant breakdown for shifts split across restaurants, so the
+      // courier sees how long they worked at each and what it earns them.
+      const parts = restaurantRevenueBreakdown(s);
+      const restaurants =
+        parts.length > 1
+          ? parts.map((p) => {
+              const range = restaurantTimeRange(s, p.restaurantId);
+              return {
+                restaurantName: p.restaurantName,
+                startTime: range.start,
+                endTime: range.end,
+                hours: round2(p.hours),
+                earning: round2(p.hours * rate),
+              };
+            })
+          : [];
       return {
         id: s.id,
         date: s.date,
@@ -56,6 +88,7 @@ export class AccountingService {
         workHours: round2(hours),
         hourlyRate: s.courierHourlyRateSnapshot.toString(),
         earning: round2(earning),
+        restaurants,
       };
     });
 
@@ -109,15 +142,19 @@ export class AccountingService {
    * `includeCourierCost` is true (admin only) each shift row also carries the
    * courier's earning for that portion, which restaurants must never see.
    */
-  async restaurantSummary(restaurantId: string, includeCourierCost = false) {
+  async restaurantSummary(restaurantId: string, includeCourierCost = false, from?: string, to?: string) {
     const restaurant = await this.prisma.restaurant.findUnique({ where: { id: restaurantId } });
     if (!restaurant) throw new NotFoundException('Restoran bulunamadı.');
+
+    const dateRange = dateFilter(from, to);
+    const paymentRange = paymentDateFilter(from, to);
 
     // Include shifts where this restaurant is the primary one OR where the
     // courier switched into this restaurant for part of the shift (a segment).
     const shifts = await this.prisma.shift.findMany({
       where: {
         ...APPROVED_WHERE,
+        ...dateRange,
         OR: [{ restaurantId }, { segments: { some: { restaurantId } } }],
       },
       include: {
@@ -132,14 +169,17 @@ export class AccountingService {
     const shiftItems = shifts.map((s) => {
       // Only this restaurant's portion of the (possibly multi-restaurant) shift.
       const portion = shiftServiceAmountForRestaurant(s, restaurantId);
+      // The actual worked interval at this restaurant (segment range), so the
+      // displayed hours match the displayed time window.
+      const range = restaurantTimeRange(s, restaurantId);
       totalWorkHours += portion.hours;
       totalServiceAmount += portion.amount;
       return {
         id: s.id,
         date: s.date,
         courierName: s.courier.name,
-        approvedStartTime: s.approvedStartTime,
-        approvedEndTime: s.approvedEndTime,
+        approvedStartTime: range.start,
+        approvedEndTime: range.end,
         workHours: round2(portion.hours),
         hourlyRate: s.restaurantHourlyRateSnapshot.toString(),
         serviceAmount: round2(portion.amount),
@@ -155,7 +195,7 @@ export class AccountingService {
       orderBy: [{ invoiceDate: 'desc' }],
     });
     const payments = await this.prisma.restaurantPayment.findMany({
-      where: { restaurantId },
+      where: { restaurantId, ...paymentRange },
       orderBy: [{ paymentDate: 'desc' }],
     });
 
@@ -204,17 +244,18 @@ export class AccountingService {
   }
 
   /** Admin restaurant-cari list: each restaurant with service/payment totals. */
-  async restaurantAccountsList() {
+  async restaurantAccountsList(from?: string, to?: string) {
+    const paymentRange = paymentDateFilter(from, to);
     const [restaurants, shifts] = await Promise.all([
       this.prisma.restaurant.findMany({
         orderBy: [{ name: 'asc' }],
         include: {
           invoices: { select: { amount: true, status: true } },
-          payments: { select: { amount: true, status: true } },
+          payments: { where: paymentRange, select: { amount: true, status: true } },
         },
       }),
       this.prisma.shift.findMany({
-        where: APPROVED_WHERE,
+        where: { ...APPROVED_WHERE, ...dateFilter(from, to) },
         include: {
           segments: { include: { restaurant: { select: { id: true, name: true } } }, orderBy: { sequence: 'asc' } },
         },

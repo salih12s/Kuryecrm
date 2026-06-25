@@ -587,9 +587,6 @@ export class ShiftsService {
     if (shift.status === ShiftStatus.CANCELLED) {
       throw new BadRequestException('İptal edilmiş vardiyaya saat bildirilemez.');
     }
-    if (shift.confirmationStatus === ShiftConfirmationStatus.ADMIN_APPROVED) {
-      throw new BadRequestException('Admin tarafından onaylanmış vardiyanın bildirimi değiştirilemez.');
-    }
     if (!dto.reportedStartTime && !dto.reportedEndTime) {
       throw new BadRequestException('En az bir saat (başlangıç veya bitiş) girilmelidir.');
     }
@@ -599,13 +596,22 @@ export class ShiftsService {
     }
 
     const data: Prisma.ShiftUpdateInput = {};
+    // Reporting new times on an already-approved shift reopens it (e.g. the
+    // courier worked extra overtime after approval). The previous approval is
+    // cleared so an admin must approve again; until then the shift leaves the
+    // reports/accounting.
+    const reopened = shift.confirmationStatus === ShiftConfirmationStatus.ADMIN_APPROVED;
+    if (reopened) {
+      data.approvedStartTime = null;
+      data.approvedEndTime = null;
+    }
     const merged = {
       restaurantReportedStartTime: shift.restaurantReportedStartTime,
       restaurantReportedEndTime: shift.restaurantReportedEndTime,
       courierReportedStartTime: shift.courierReportedStartTime,
       courierReportedEndTime: shift.courierReportedEndTime,
-      status: shift.status,
-      confirmationStatus: shift.confirmationStatus,
+      status: reopened && shift.status === ShiftStatus.COMPLETED ? ShiftStatus.IN_PROGRESS : shift.status,
+      confirmationStatus: reopened ? ShiftConfirmationStatus.WAITING : shift.confirmationStatus,
     };
 
     if (who === 'restaurant') {
