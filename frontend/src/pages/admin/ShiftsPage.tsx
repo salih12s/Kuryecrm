@@ -439,7 +439,6 @@ export default function ShiftsPage() {
             <Field label="Ekstra Başlangıç" type="time" value={form.extraStartTime} onChange={(e) => setForm({ ...form, extraStartTime: e.target.value })} hint="Ekstra mesai (opsiyonel, ikisi birlikte)." />
             <Field label="Ekstra Bitiş" type="time" value={form.extraEndTime} onChange={(e) => setForm({ ...form, extraEndTime: e.target.value })} />
           </div>
-          <Field label="Not" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={() => setFormOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-text hover:bg-slate-100">İptal</button>
             <button type="submit" disabled={saving} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-60">{saving ? 'Kaydediliyor...' : 'Kaydet'}</button>

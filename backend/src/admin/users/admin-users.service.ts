@@ -29,6 +29,13 @@ export class AdminUsersService {
 
   async findAll() {
     const users = await this.prisma.user.findMany({
+      // Hide users whose restaurant/courier profile was soft-deleted.
+      where: {
+        AND: [
+          { OR: [{ restaurant: { is: null } }, { restaurant: { deletedAt: null } }] },
+          { OR: [{ courier: { is: null } }, { courier: { deletedAt: null } }] },
+        ],
+      },
       include: {
         restaurant: { select: { id: true, name: true } },
         courier: { select: { id: true, name: true } },
