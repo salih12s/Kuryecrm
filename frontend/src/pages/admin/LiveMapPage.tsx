@@ -4,20 +4,24 @@ import LiveMap from '../../components/map/LiveMap';
 import { liveMapApi, courierStatusText, secondsAgoLabel } from '../../lib/tracking';
 import type { LiveMapData } from '../../types';
 
-const POLL_MS = 15_000;
+const POLL_MS = 10_000;
 
 export default function LiveMapPage() {
   const [data, setData] = useState<LiveMapData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasData = useRef(false);
 
+  // Silent background refresh: a transient poll failure keeps the last map on
+  // screen (no banner, no flicker); we only surface an error on the first load.
   const load = async () => {
     try {
       setData(await liveMapApi.get());
+      hasData.current = true;
       setError(null);
     } catch {
-      setError('Canlı harita yüklenemedi.');
+      if (!hasData.current) setError('Canlı harita yüklenemedi.');
     } finally {
       setLoading(false);
     }
