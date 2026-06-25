@@ -71,7 +71,7 @@ function navFor(role?: string): NavSection[] {
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   return (
-    <DashboardLayout brand="KuryeCrm" navSections={navFor(user?.role)}>
+    <DashboardLayout brand="Geliyo" navSections={navFor(user?.role)}>
       {children}
     </DashboardLayout>
   );

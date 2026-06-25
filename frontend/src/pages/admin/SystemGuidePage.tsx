@@ -84,7 +84,7 @@ export default function SystemGuidePage() {
           <p className="text-sm font-semibold text-accent">KURYECRM REHBERİ</p>
           <h1 className="mt-1 text-2xl font-bold text-primary">Sistem nasıl çalışır?</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
-            KuryeCrm; restoran, kurye ve vardiya bilgilerini tek yerde toplar. Onaylanan
+            Geliyo; restoran, kurye ve vardiya bilgilerini tek yerde toplar. Onaylanan
             çalışmalar üzerinden hak ediş, cari bakiye, ödeme ve kârlılık hesaplarını takip etmenizi sağlar.
           </p>
         </div>

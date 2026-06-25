@@ -101,9 +101,7 @@ export default function DashboardLayout({ brand, navItems = [], navSections, chi
         }`}
       >
         <div className="flex h-16 shrink-0 items-center gap-3 border-b border-white/10 px-4">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-base font-bold shadow-sm">
-            K
-          </span>
+          <img src="/logo.png" alt={brand} className="h-9 w-9 shrink-0 rounded-xl object-cover shadow-sm" />
           <div>
             <span className="block text-base font-semibold leading-tight">{brand}</span>
             <span className="block text-[11px] text-slate-400">İş yönetim paneli</span>
@@ -172,7 +170,7 @@ export default function DashboardLayout({ brand, navItems = [], navSections, chi
             ☰
           </button>
           <p className="ml-3 truncate text-sm font-semibold text-primary md:ml-0">
-            {activeItem?.label ?? 'KuryeCrm'}
+            {activeItem?.label ?? 'Geliyo'}
           </p>
           <div className="flex items-center gap-4">
             <div className="hidden text-right sm:block">

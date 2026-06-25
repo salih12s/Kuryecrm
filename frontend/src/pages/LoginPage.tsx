@@ -39,10 +39,8 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-2xl font-bold text-accent">
-            K
-          </div>
-          <h1 className="text-2xl font-bold text-primary">KuryeCrm</h1>
+          <img src="/logo.png" alt="Geliyo" className="mx-auto mb-4 h-16 w-16 rounded-2xl object-cover shadow-sm" />
+          <h1 className="text-2xl font-bold text-primary">Geliyo</h1>
           <p className="mt-1 text-sm text-muted">Kurye &amp; Restoran Operasyon Sistemi</p>
         </div>
 
@@ -94,7 +92,7 @@ export default function LoginPage() {
         </form>
 
         <p className="mt-6 text-center text-xs text-muted">
-          © {new Date().getFullYear()} KuryeCrm · Operasyon Yönetim Sistemi
+          © {new Date().getFullYear()} Geliyo · Operasyon Yönetim Sistemi
         </p>
       </div>
     </div>

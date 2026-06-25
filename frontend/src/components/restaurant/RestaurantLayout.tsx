@@ -9,7 +9,7 @@ const RESTAURANT_NAV: NavItem[] = [
 
 export default function RestaurantLayout({ children }: { children: ReactNode }) {
   return (
-    <DashboardLayout brand="KuryeCrm" navItems={RESTAURANT_NAV}>
+    <DashboardLayout brand="Geliyo" navItems={RESTAURANT_NAV}>
       {children}
     </DashboardLayout>
   );

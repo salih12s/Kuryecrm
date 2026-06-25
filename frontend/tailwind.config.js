@@ -4,15 +4,16 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: '#0F172A',
-        accent: '#F97316',
+        // geliyo brand: red / white / black, kept harmonious and easy on the eyes.
+        primary: '#1A1A1A', // near-black: sidebar, headings
+        accent: '#E11414', // geliyo red: brand, primary actions, active nav
         background: '#F8FAFC',
         card: '#FFFFFF',
         success: '#16A34A',
         warning: '#FACC15',
-        danger: '#DC2626',
-        text: '#1E293B',
-        muted: '#64748B',
+        danger: '#991B1B', // deeper red for destructive actions (distinct from brand)
+        text: '#1F2937',
+        muted: '#6B7280',
       },
     },
   },

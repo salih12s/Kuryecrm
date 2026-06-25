@@ -50,7 +50,7 @@ function Banner({ tone, children }: { tone: 'success' | 'danger' | 'muted'; chil
 
 export default function CourierLayout({ children }: { children: ReactNode }) {
   return (
-    <DashboardLayout brand="KuryeCrm" navItems={COURIER_NAV}>
+    <DashboardLayout brand="Geliyo" navItems={COURIER_NAV}>
       <TrackingBanner />
       {children}
     </DashboardLayout>
