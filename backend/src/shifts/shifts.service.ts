@@ -17,6 +17,7 @@ import { CreateShiftDto } from './dto/create-shift.dto';
 import { UpdateShiftDto } from './dto/update-shift.dto';
 import { ApproveTimeDto } from './dto/approve-time.dto';
 import { ReportTimeDto } from './dto/report-time.dto';
+import { ConfirmTimeDto } from './dto/confirm-time.dto';
 import { SwitchRestaurantDto } from './dto/switch-restaurant.dto';
 import { PartyShiftQueryDto, ShiftQueryDto } from './dto/shift-query.dto';
 
@@ -38,6 +39,16 @@ const shiftInclude = {
 } satisfies Prisma.ShiftInclude;
 
 type ShiftWithRefs = Prisma.ShiftGetPayload<{ include: typeof shiftInclude }>;
+
+/**
+ * A shift is "pending confirmation" when the courier has stamped a clock event
+ * (start or end) that the restaurant has not confirmed yet. Reused by both the
+ * restaurant pending-count and the courier waiting-count.
+ */
+const PENDING_CONFIRM_WHERE: Prisma.ShiftWhereInput[] = [
+  { courierReportedStartTime: { not: null }, restaurantReportedStartTime: null },
+  { courierReportedEndTime: { not: null }, restaurantReportedEndTime: null },
+];
 
 @Injectable()
 export class ShiftsService {
@@ -140,6 +151,68 @@ export class ShiftsService {
     };
   }
 
+  /**
+   * Real-time clock-in/out phase derived purely from the reported time fields.
+   * Couriers stamp their own start/end live; the restaurant only confirms. So the
+   * party that still owes an action in a *_PENDING_CONFIRM phase is always the
+   * restaurant (restaurant confirmation is guarded to require the courier stamp
+   * first, so the restaurant can never be ahead of the courier).
+   */
+  private deriveClockPhase(shift: {
+    restaurantReportedStartTime: string | null;
+    restaurantReportedEndTime: string | null;
+    courierReportedStartTime: string | null;
+    courierReportedEndTime: string | null;
+    status: ShiftStatus;
+    confirmationStatus: ShiftConfirmationStatus;
+  }) {
+    const courierStartedAt = shift.courierReportedStartTime;
+    const restaurantConfirmedStartAt = shift.restaurantReportedStartTime;
+    const courierEndedAt = shift.courierReportedEndTime;
+    const restaurantConfirmedEndAt = shift.restaurantReportedEndTime;
+
+    type Phase =
+      | 'WAITING_START'
+      | 'START_PENDING_CONFIRM'
+      | 'RUNNING'
+      | 'END_PENDING_CONFIRM'
+      | 'MATCHED'
+      | 'DISPUTED';
+
+    let clockPhase: Phase;
+    let pendingParty: 'restaurant' | 'courier' | null = null;
+
+    if (shift.confirmationStatus === ShiftConfirmationStatus.ADMIN_APPROVED) {
+      clockPhase = 'MATCHED';
+    } else if (
+      shift.confirmationStatus === ShiftConfirmationStatus.DISPUTED ||
+      shift.status === ShiftStatus.DISPUTED
+    ) {
+      clockPhase = 'DISPUTED';
+    } else if (!courierStartedAt) {
+      clockPhase = 'WAITING_START';
+    } else if (!restaurantConfirmedStartAt) {
+      clockPhase = 'START_PENDING_CONFIRM';
+      pendingParty = 'restaurant';
+    } else if (!courierEndedAt) {
+      clockPhase = 'RUNNING';
+    } else if (!restaurantConfirmedEndAt) {
+      clockPhase = 'END_PENDING_CONFIRM';
+      pendingParty = 'restaurant';
+    } else {
+      clockPhase = 'MATCHED';
+    }
+
+    return {
+      courierStartedAt,
+      restaurantConfirmedStartAt,
+      courierEndedAt,
+      restaurantConfirmedEndAt,
+      clockPhase,
+      pendingParty,
+    };
+  }
+
   private serializeSegments(shift: ShiftWithRefs) {
     return shift.segments.map((seg) => ({
       id: seg.id,
@@ -198,6 +271,7 @@ export class ShiftsService {
       approvedStartTime: shift.approvedStartTime,
       approvedEndTime: shift.approvedEndTime,
       ...derived,
+      ...this.deriveClockPhase(shift),
       segments: this.serializeSegments(shift),
       status: shift.status,
       confirmationStatus: shift.confirmationStatus,
@@ -209,23 +283,22 @@ export class ShiftsService {
     };
   }
 
-  /** Party responses intentionally omit all counterparty rates and profit data. */
-  private serializeParty(shift: ShiftWithRefs, perspective: 'restaurant' | 'courier') {
+  /**
+   * Party responses omit only rate/profit data. Both parties' reported clock
+   * times stay visible: the mutual confirmation flow needs each side to see the
+   * other's stamped time (e.g. "courier started at 14:03 — confirm"). Times are
+   * not sensitive; only the hourly-rate snapshots and computed profit are.
+   */
+  private serializeParty(shift: ShiftWithRefs, _perspective: 'restaurant' | 'courier') {
     const {
       restaurantHourlyRateSnapshot: _restaurantRate,
       courierHourlyRateSnapshot: _courierRate,
       calculation: _calculation,
       adminNote: _adminNote,
-      restaurantReportedStartTime,
-      restaurantReportedEndTime,
-      courierReportedStartTime,
-      courierReportedEndTime,
       ...safe
     } = this.serializeAdmin(shift);
 
-    return perspective === 'restaurant'
-      ? { ...safe, restaurantReportedStartTime, restaurantReportedEndTime }
-      : { ...safe, courierReportedStartTime, courierReportedEndTime };
+    return safe;
   }
 
   private buildWhere(
@@ -531,18 +604,69 @@ export class ShiftsService {
     return (shifts as ShiftWithRefs[]).map((s) => this.serializeParty(s, 'restaurant'));
   }
 
-  async restaurantFindOne(userId: string, id: string) {
-    const restaurantId = await this.restaurantIdForUser(userId);
-    const shift = await this.findRaw(id);
-    // A restaurant may view a shift where it is the primary restaurant OR where
-    // the courier worked part of the shift at this restaurant (a segment).
+  /**
+   * A restaurant may act on a shift where it is the primary restaurant OR where
+   * the courier worked part of the shift at this restaurant (a segment).
+   */
+  private assertRestaurantInvolved(shift: ShiftWithRefs, restaurantId: string) {
     const involved =
       shift.restaurantId === restaurantId ||
       shift.segments.some((seg) => seg.restaurantId === restaurantId);
     if (!involved) {
       throw new ForbiddenException('Bu vardiyaya erişim yetkiniz yok.');
     }
+  }
+
+  async restaurantFindOne(userId: string, id: string) {
+    const restaurantId = await this.restaurantIdForUser(userId);
+    const shift = await this.findRaw(id);
+    this.assertRestaurantInvolved(shift, restaurantId);
     return this.serializeParty(shift, 'restaurant');
+  }
+
+  /**
+   * Restaurant confirms the courier's live clock-in. Accepts the courier's
+   * stamped start time by default, or a corrected time (which becomes a dispute
+   * once both ends are in). Guarded so the restaurant cannot confirm before the
+   * courier has actually clocked in.
+   */
+  async restaurantConfirmStart(userId: string, id: string, dto: ConfirmTimeDto) {
+    const restaurantId = await this.restaurantIdForUser(userId);
+    const shift = await this.findRaw(id);
+    this.assertRestaurantInvolved(shift, restaurantId);
+    if (!shift.courierReportedStartTime) {
+      throw new BadRequestException('Kurye henüz mesai başlangıcı bildirmedi.');
+    }
+    const time = dto.reportedTime || shift.courierReportedStartTime;
+    return this.applyReport(shift, 'restaurant', { reportedStartTime: time });
+  }
+
+  /** Restaurant confirms the courier's live clock-out (mirror of confirm-start). */
+  async restaurantConfirmEnd(userId: string, id: string, dto: ConfirmTimeDto) {
+    const restaurantId = await this.restaurantIdForUser(userId);
+    const shift = await this.findRaw(id);
+    this.assertRestaurantInvolved(shift, restaurantId);
+    if (!shift.courierReportedEndTime) {
+      throw new BadRequestException('Kurye henüz mesai çıkışı bildirmedi.');
+    }
+    const time = dto.reportedTime || shift.courierReportedEndTime;
+    return this.applyReport(shift, 'restaurant', { reportedEndTime: time });
+  }
+
+  /** Count of shifts awaiting THIS restaurant's start/end confirmation. */
+  async restaurantPendingCount(userId: string): Promise<{ count: number }> {
+    const restaurantId = await this.restaurantIdForUser(userId);
+    const count = await this.prisma.shift.count({
+      where: {
+        status: { not: ShiftStatus.CANCELLED },
+        confirmationStatus: { not: ShiftConfirmationStatus.ADMIN_APPROVED },
+        AND: [
+          { OR: [{ restaurantId }, { segments: { some: { restaurantId } } }] },
+          { OR: PENDING_CONFIRM_WHERE },
+        ],
+      },
+    });
+    return { count };
   }
 
   // ---------------------------------------------------------------- COURIER
@@ -572,6 +696,20 @@ export class ShiftsService {
     return this.serializeParty(shift, 'courier');
   }
 
+  /** Count of this courier's shifts whose clock event is awaiting restaurant confirmation. */
+  async courierWaitingCount(userId: string): Promise<{ count: number }> {
+    const courierId = await this.courierIdForUser(userId);
+    const count = await this.prisma.shift.count({
+      where: {
+        courierId,
+        status: { not: ShiftStatus.CANCELLED },
+        confirmationStatus: { not: ShiftConfirmationStatus.ADMIN_APPROVED },
+        OR: PENDING_CONFIRM_WHERE,
+      },
+    });
+    return { count };
+  }
+
   async courierReportTime(userId: string, id: string, dto: ReportTimeDto) {
     const courierId = await this.courierIdForUser(userId);
     const shift = await this.findRaw(id);
@@ -590,9 +728,27 @@ export class ShiftsService {
     if (!dto.reportedStartTime && !dto.reportedEndTime) {
       throw new BadRequestException('En az bir saat (başlangıç veya bitiş) girilmelidir.');
     }
+    // The restaurant only confirms what the courier has already stamped; it can
+    // never confirm a clock event the courier has not reported yet.
+    if (who === 'restaurant') {
+      if (dto.reportedStartTime && !shift.courierReportedStartTime) {
+        throw new BadRequestException('Kurye henüz mesai başlangıcı bildirmedi.');
+      }
+      if (dto.reportedEndTime && !shift.courierReportedEndTime) {
+        throw new BadRequestException('Kurye henüz mesai çıkışı bildirmedi.');
+      }
+    }
     // When both provided, end must be after start.
     if (dto.reportedStartTime && dto.reportedEndTime) {
       this.assertTimeOrder(dto.reportedStartTime, dto.reportedEndTime, 'Bildirilen');
+    } else if (dto.reportedEndTime) {
+      // Live clock-out (end only): validate against the already-stamped start so
+      // a courier can't clock out at the same minute they clocked in.
+      const existingStart =
+        who === 'courier' ? shift.courierReportedStartTime : shift.restaurantReportedStartTime;
+      if (existingStart) {
+        this.assertTimeOrder(existingStart, dto.reportedEndTime, 'Bildirilen');
+      }
     }
 
     const data: Prisma.ShiftUpdateInput = {};

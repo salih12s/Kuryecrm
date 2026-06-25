@@ -112,6 +112,19 @@ export type ShiftConfirmationStatus =
   | 'DISPUTED'
   | 'ADMIN_APPROVED';
 
+/**
+ * Live mutual clock-in/out phase. Couriers stamp their own start/end; the
+ * restaurant only confirms, so the restaurant is always the `pendingParty` in
+ * the `*_PENDING_CONFIRM` phases.
+ */
+export type ClockPhase =
+  | 'WAITING_START'
+  | 'START_PENDING_CONFIRM'
+  | 'RUNNING'
+  | 'END_PENDING_CONFIRM'
+  | 'MATCHED'
+  | 'DISPUTED';
+
 export interface ShiftCalculation {
   workHours: number;
   restaurantRevenue: number;
@@ -306,6 +319,13 @@ export interface Shift extends ShiftDerived {
   courierReportedEndTime: string | null;
   approvedStartTime: string | null;
   approvedEndTime: string | null;
+  // Live mutual clock-in/out (derived by the backend from the reported times).
+  courierStartedAt: string | null;
+  restaurantConfirmedStartAt: string | null;
+  courierEndedAt: string | null;
+  restaurantConfirmedEndAt: string | null;
+  clockPhase: ClockPhase;
+  pendingParty: 'restaurant' | 'courier' | null;
   segments: ShiftSegment[];
   status: ShiftStatus;
   confirmationStatus: ShiftConfirmationStatus;
@@ -316,23 +336,15 @@ export interface Shift extends ShiftDerived {
   updatedAt: string;
 }
 
-/** Role-safe shift payload returned to restaurant/courier self-service panels. */
+/**
+ * Role-safe shift payload returned to restaurant/courier self-service panels.
+ * Only rate/profit data is withheld; both parties' reported clock times stay
+ * visible so each side can see and confirm the other's stamped time.
+ */
 export type PartyShift = Omit<
   Shift,
-  | 'restaurantHourlyRateSnapshot'
-  | 'courierHourlyRateSnapshot'
-  | 'calculation'
-  | 'adminNote'
-  | 'restaurantReportedStartTime'
-  | 'restaurantReportedEndTime'
-  | 'courierReportedStartTime'
-  | 'courierReportedEndTime'
-> & {
-  restaurantReportedStartTime?: string | null;
-  restaurantReportedEndTime?: string | null;
-  courierReportedStartTime?: string | null;
-  courierReportedEndTime?: string | null;
-};
+  'restaurantHourlyRateSnapshot' | 'courierHourlyRateSnapshot' | 'calculation' | 'adminNote'
+>;
 
 // ---------------- Reports (Phase 5) ----------------
 

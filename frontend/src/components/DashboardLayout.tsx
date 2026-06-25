@@ -6,6 +6,8 @@ export interface NavItem {
   label: string;
   /** Route to navigate to. When omitted the item renders as a disabled button. */
   to?: string;
+  /** Optional count badge (e.g. pending confirmations); hidden when 0/undefined. */
+  badge?: number;
 }
 
 export interface NavSection {
@@ -84,7 +86,12 @@ export default function DashboardLayout({ brand, navItems = [], navSections, chi
           className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-70"
           aria-hidden="true"
         />
-        {item.label}
+        <span className="flex-1">{item.label}</span>
+        {item.badge ? (
+          <span className="ml-auto inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 px-1.5 text-[11px] font-semibold text-white">
+            {item.badge}
+          </span>
+        ) : null}
       </NavLink>
     ) : (
       <span key={item.label} className={`${baseItem} cursor-default text-white/40`}>

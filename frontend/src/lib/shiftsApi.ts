@@ -1,4 +1,5 @@
 import { api } from './api';
+import { nowHHmm } from './format';
 import type { PartyShift, Shift, ShiftStatus } from '../types';
 
 export interface ShiftFilters {
@@ -43,12 +44,20 @@ export const adminShiftsApi = {
     (await api.patch<Shift>(`/admin/shifts/${id}/switch-restaurant`, payload)).data,
 };
 
-// ---------------- Restaurant (read-only) ----------------
+// ---------------- Restaurant ----------------
 
 export const restaurantShiftsApi = {
   list: async (filters: Pick<ShiftFilters, 'dateFrom' | 'dateTo' | 'status'> = {}) =>
     (await api.get<PartyShift[]>('/restaurant/shifts', { params: clean(filters) })).data,
   get: async (id: string) => (await api.get<PartyShift>(`/restaurant/shifts/${id}`)).data,
+  // Confirm the courier's live clock-in/out. Omit `time` to accept the courier's
+  // stamped time as-is; pass a time to record a correction.
+  confirmStart: async (id: string, time?: string) =>
+    (await api.patch<PartyShift>(`/restaurant/shifts/${id}/confirm-start`, time ? { reportedTime: time } : {})).data,
+  confirmEnd: async (id: string, time?: string) =>
+    (await api.patch<PartyShift>(`/restaurant/shifts/${id}/confirm-end`, time ? { reportedTime: time } : {})).data,
+  pendingCount: async () =>
+    (await api.get<{ count: number }>('/restaurant/shifts/pending-count')).data.count,
 };
 
 // ---------------- Courier ----------------
@@ -59,4 +68,11 @@ export const courierShiftsApi = {
   get: async (id: string) => (await api.get<PartyShift>(`/courier/shifts/${id}`)).data,
   reportTime: async (id: string, payload: Record<string, unknown>) =>
     (await api.patch<PartyShift>(`/courier/shifts/${id}/report-time`, clean(payload))).data,
+  // Live clock-in/out: stamp the current local time as the courier's start/end.
+  clockIn: async (id: string) =>
+    (await api.patch<PartyShift>(`/courier/shifts/${id}/report-time`, { reportedStartTime: nowHHmm() })).data,
+  clockOut: async (id: string) =>
+    (await api.patch<PartyShift>(`/courier/shifts/${id}/report-time`, { reportedEndTime: nowHHmm() })).data,
+  waitingCount: async () =>
+    (await api.get<{ count: number }>('/courier/shifts/waiting-count')).data.count,
 };

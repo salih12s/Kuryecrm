@@ -1,12 +1,27 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import DashboardLayout, { type NavItem } from '../DashboardLayout';
 import { useCourierTracking } from '../../hooks/useCourierTracking';
+import { courierShiftsApi } from '../../lib/shiftsApi';
 
-const COURIER_NAV: NavItem[] = [
-  { label: 'Genel Bakış', to: '/courier' },
-  { label: 'Vardiyalarım', to: '/courier/shifts' },
-  { label: 'Hakedişim', to: '/courier/account' },
-];
+/** Polls the count of this courier's clock events awaiting restaurant confirmation. */
+function useWaitingConfirmations(): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const load = () =>
+      courierShiftsApi
+        .waitingCount()
+        .then((c) => active && setCount(c))
+        .catch(() => undefined);
+    load();
+    const t = setInterval(load, 20_000);
+    return () => {
+      active = false;
+      clearInterval(t);
+    };
+  }, []);
+  return count;
+}
 
 /** Small banner reflecting the live-tracking state during an active shift. */
 function TrackingBanner() {
@@ -49,9 +64,20 @@ function Banner({ tone, children }: { tone: 'success' | 'danger' | 'muted'; chil
 }
 
 export default function CourierLayout({ children }: { children: ReactNode }) {
+  const waiting = useWaitingConfirmations();
+  const nav: NavItem[] = [
+    { label: 'Genel Bakış', to: '/courier' },
+    { label: 'Vardiyalarım', to: '/courier/shifts', badge: waiting },
+    { label: 'Hakedişim', to: '/courier/account' },
+  ];
   return (
-    <DashboardLayout brand="Geliyo" navItems={COURIER_NAV}>
+    <DashboardLayout brand="Geliyo" navItems={nav}>
       <TrackingBanner />
+      {waiting > 0 && (
+        <Banner tone="muted">
+          {waiting} mesai bildiriminiz restoran onayını bekliyor.
+        </Banner>
+      )}
       {children}
     </DashboardLayout>
   );

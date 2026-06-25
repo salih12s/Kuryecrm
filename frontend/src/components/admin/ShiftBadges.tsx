@@ -1,4 +1,4 @@
-import type { ShiftConfirmationStatus, ShiftStatus } from '../../types';
+import type { ClockPhase, ShiftConfirmationStatus, ShiftStatus } from '../../types';
 
 const base = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap';
 
@@ -18,6 +18,24 @@ const CONFIRMATION_STYLE: Record<ShiftConfirmationStatus, { label: string; cls: 
   DISPUTED: { label: 'Uyuşmazlık Var', cls: 'bg-danger/10 text-danger' },
   ADMIN_APPROVED: { label: 'Onaylandı', cls: 'bg-success/10 text-success' },
 };
+
+const CLOCK_PHASE_STYLE: Record<ClockPhase, { label: string; cls: string }> = {
+  WAITING_START: { label: 'Başlamadı', cls: 'bg-slate-100 text-slate-600' },
+  START_PENDING_CONFIRM: { label: 'Başlangıç onayı bekleniyor', cls: 'bg-amber-100 text-amber-700' },
+  RUNNING: { label: 'Mesai sürüyor', cls: 'bg-blue-100 text-blue-700' },
+  END_PENDING_CONFIRM: { label: 'Çıkış onayı bekleniyor', cls: 'bg-amber-100 text-amber-700' },
+  MATCHED: { label: 'Eşleşti', cls: 'bg-success/10 text-success' },
+  DISPUTED: { label: 'Uyuşmazlık Var', cls: 'bg-danger/10 text-danger' },
+};
+
+export function getClockPhaseLabel(phase: ClockPhase): string {
+  return CLOCK_PHASE_STYLE[phase].label;
+}
+
+export function ClockPhaseBadge({ phase }: { phase: ClockPhase }) {
+  const s = CLOCK_PHASE_STYLE[phase];
+  return <span className={`${base} ${s.cls}`}>{s.label}</span>;
+}
 
 export function getShiftStatusLabel(status: ShiftStatus): string {
   return STATUS_STYLE[status].label;

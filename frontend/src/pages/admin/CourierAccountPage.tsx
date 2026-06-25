@@ -17,7 +17,7 @@ export default function CourierAccountPage() {
 
   return (
     <AdminLayout>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-primary">
             Kurye Hesap Özeti{data ? ` — ${data.courier.name}` : ''}

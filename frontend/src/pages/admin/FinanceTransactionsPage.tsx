@@ -135,7 +135,37 @@ export default function FinanceTransactionsPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm">
+      {/* Mobile: stacked cards */}
+      <div className="space-y-3 md:hidden">
+        {loading ? (
+          <p className="py-8 text-center text-sm text-muted">Yükleniyor...</p>
+        ) : rows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted">Kayıt bulunamadı.</p>
+        ) : rows.map((t) => (
+          <div key={t.id} className="rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="font-semibold text-text">{t.title}</p>
+                <p className="text-xs text-muted">{formatDateTR(t.transactionDate)}{t.category ? ` · ${t.category}` : ''}</p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <TxTypeBadge type={t.type} />
+                <StatusPill status={t.status} />
+              </div>
+            </div>
+            <p className="mt-2 text-lg font-bold text-text">{formatTL(t.amount)}</p>
+            {canEdit && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button onClick={() => openEdit(t)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-text hover:bg-slate-100">Düzenle</button>
+                <button onClick={() => toggle(t)} className={`rounded-md px-2.5 py-1 text-xs font-medium text-white ${t.status === 'ACTIVE' ? 'bg-danger hover:bg-danger/90' : 'bg-success hover:bg-success/90'}`}>{t.status === 'ACTIVE' ? 'İptal Et' : 'Aktif Et'}</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

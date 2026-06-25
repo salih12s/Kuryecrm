@@ -179,7 +179,35 @@ export default function RestaurantAccountsPage() {
         <span className="text-xs text-muted">{from || to ? 'Seçilen aralıktaki hizmet ve ödemeler gösteriliyor.' : 'Tüm zamanlar gösteriliyor.'}</span>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm">
+      {/* Mobile: stacked cards */}
+      <div className="space-y-3 md:hidden">
+        {loadingList ? (
+          <p className="py-8 text-center text-sm text-muted">Yükleniyor...</p>
+        ) : list.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted">Restoran bulunamadı.</p>
+        ) : list.map((r) => (
+          <div key={r.id} className={`rounded-xl border bg-card p-4 shadow-sm ${selectedId === r.id ? 'border-accent' : 'border-slate-200'}`}>
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-semibold text-text">{r.name}</p>
+              <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${balanceStyle(r.remainingBalance)}`}>{balanceLabel(r.remainingBalance)}</span>
+            </div>
+            <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+              <dt className="text-muted">Hizmet Bedeli</dt>
+              <dd className="text-right text-text">{formatTL(r.totalServiceAmount)}</dd>
+              <dt className="text-muted">Ödenen</dt>
+              <dd className="text-right text-text">{formatTL(r.totalPaid)}</dd>
+              <dt className="text-muted">Kalan Borç</dt>
+              <dd className={`text-right font-semibold ${r.remainingBalance > 0 ? 'text-danger' : 'text-success'}`}>{formatTL(r.remainingBalance)}</dd>
+            </dl>
+            <div className="mt-3">
+              <button onClick={() => select(r.id)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-text hover:bg-slate-100">Detay</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -225,7 +253,7 @@ export default function RestaurantAccountsPage() {
             <p className="text-sm text-muted">Detay yükleniyor...</p>
           ) : (
             <>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-xl font-bold text-primary">{detail.restaurant.name} — Cari Detay</h2>
                 {canEdit && (
                   <div className="flex gap-2">

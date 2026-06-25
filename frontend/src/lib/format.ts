@@ -16,6 +16,13 @@ export function formatDateTR(date: string): string {
   return new Intl.DateTimeFormat('tr-TR').format(d);
 }
 
+/** Current local time as an "HH:mm" string, for live clock-in/out stamping. */
+export function nowHHmm(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /** Renders a start-end time pair, falling back to a dash. */
 export function timeRange(start?: string | null, end?: string | null): string {
   if (!start && !end) return '—';

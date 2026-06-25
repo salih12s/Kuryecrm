@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import axios from 'axios';
 import Modal from '../Modal';
 import Field from '../admin/Field';
 import {
   ShiftStatusBadge,
-  ConfirmationBadge,
+  ClockPhaseBadge,
   getConfirmationStatusLabel,
 } from '../admin/ShiftBadges';
 import { formatDateTR, timeRange } from '../../lib/format';
@@ -17,12 +17,25 @@ interface Props {
   perspective: 'restaurant' | 'courier';
   list: () => Promise<PartyShift[]>;
   report: (id: string, payload: Record<string, unknown>) => Promise<PartyShift>;
+  /** Live clock-in/out, provided for the courier perspective. */
+  clockIn?: (id: string) => Promise<PartyShift>;
+  clockOut?: (id: string) => Promise<PartyShift>;
 }
 
-/** Self-service shift list + report-time modal, shared by restaurant & courier. */
-export default function PartyShiftsView({ title, subtitle, perspective, list, report }: Props) {
+/** Self-service shift list with live clock-in/out + manual time correction. */
+export default function PartyShiftsView({
+  title,
+  subtitle,
+  perspective,
+  list,
+  report,
+  clockIn,
+  clockOut,
+}: Props) {
   const [rows, setRows] = useState<PartyShift[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<PartyShift | null>(null);
@@ -30,11 +43,6 @@ export default function PartyShiftsView({ title, subtitle, perspective, list, re
   const [end, setEnd] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  // Courier confirmation prompt that pops up on entry for unconfirmed shifts.
-  const [confirmTarget, setConfirmTarget] = useState<PartyShift | null>(null);
-  const [accepting, setAccepting] = useState(false);
-  const dismissed = useRef<Set<string>>(new Set());
 
   const otherHeader = perspective === 'restaurant' ? 'Kurye' : 'Restoran';
   const otherName = (s: PartyShift) => (perspective === 'restaurant' ? s.courierName : s.restaurantName);
@@ -46,20 +54,7 @@ export default function PartyShiftsView({ title, subtitle, perspective, list, re
   const load = async () => {
     setLoading(true);
     try {
-      const data = await list();
-      setRows(data);
-      // Couriers get a confirmation prompt for the first shift they haven't
-      // responded to yet (not cancelled, not finalised, no reported time).
-      if (perspective === 'courier') {
-        const pending = data.find(
-          (s) =>
-            s.status !== 'CANCELLED' &&
-            s.confirmationStatus !== 'ADMIN_APPROVED' &&
-            !s.courierReportedStartTime &&
-            !dismissed.current.has(s.id),
-        );
-        setConfirmTarget(pending ?? null);
-      }
+      setRows(await list());
     } catch {
       setRows([]);
     } finally {
@@ -67,40 +62,23 @@ export default function PartyShiftsView({ title, subtitle, perspective, list, re
     }
   };
 
-  // Accept the planned times as-is: reports them as the courier's times.
-  const acceptPlanned = async () => {
-    if (!confirmTarget) return;
-    setAccepting(true);
-    setError(null);
-    try {
-      await report(confirmTarget.id, {
-        reportedStartTime: confirmTarget.plannedStartTime,
-        reportedEndTime: confirmTarget.plannedEndTime,
-      });
-      setConfirmTarget(null);
-      await load();
-    } catch (err) {
-      setError(extractError(err));
-    } finally {
-      setAccepting(false);
-    }
-  };
-
-  const editFromConfirm = () => {
-    const s = confirmTarget;
-    setConfirmTarget(null);
-    if (s) openReport(s);
-  };
-
-  const dismissConfirm = () => {
-    if (confirmTarget) dismissed.current.add(confirmTarget.id);
-    setConfirmTarget(null);
-  };
-
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const runClock = async (s: PartyShift, action: (id: string) => Promise<PartyShift>) => {
+    setBusyId(s.id);
+    setActionError(null);
+    try {
+      await action(s.id);
+      await load();
+    } catch (err) {
+      setActionError(extractError(err));
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const openReport = (s: PartyShift) => {
     setTarget(s);
@@ -130,6 +108,60 @@ export default function PartyShiftsView({ title, subtitle, perspective, list, re
     }
   };
 
+  // The single primary action for a courier row, driven by the clock phase.
+  const renderActions = (s: PartyShift) => {
+    if (perspective !== 'courier' || !clockIn || !clockOut) {
+      return (
+        <button
+          onClick={() => openReport(s)}
+          disabled={s.status === 'CANCELLED'}
+          className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+        >
+          {s.confirmationStatus === 'ADMIN_APPROVED' ? 'Ek Mesai Bildir' : 'Saat Bildir'}
+        </button>
+      );
+    }
+
+    const busy = busyId === s.id;
+    const cancelled = s.status === 'CANCELLED';
+    const approved = s.confirmationStatus === 'ADMIN_APPROVED';
+
+    return (
+      <div className="flex flex-col items-stretch gap-1.5 sm:items-end">
+        {!cancelled && !approved && !s.courierStartedAt && (
+          <button
+            onClick={() => runClock(s, clockIn)}
+            disabled={busy}
+            className="rounded-lg bg-success px-3 py-2 text-xs font-semibold text-white hover:bg-success/90 disabled:opacity-60"
+          >
+            {busy ? '...' : '▶ Mesaiye Başla'}
+          </button>
+        )}
+        {!cancelled && !approved && s.courierStartedAt && !s.courierEndedAt && (
+          <button
+            onClick={() => runClock(s, clockOut)}
+            disabled={busy}
+            className="rounded-lg bg-danger px-3 py-2 text-xs font-semibold text-white hover:bg-danger/90 disabled:opacity-60"
+          >
+            {busy ? '...' : '■ Çıkış Yap'}
+          </button>
+        )}
+        {s.pendingParty === 'restaurant' && (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-center text-[11px] font-medium text-amber-700">
+            Restoran onayı bekleniyor
+          </span>
+        )}
+        <button
+          onClick={() => openReport(s)}
+          disabled={cancelled}
+          className="text-[11px] font-medium text-accent underline-offset-2 hover:underline disabled:opacity-50"
+        >
+          {approved ? 'Ek mesai bildir' : 'Saati düzelt'}
+        </button>
+      </div>
+    );
+  };
+
   return (
     <>
       <div className="mb-6">
@@ -137,19 +169,60 @@ export default function PartyShiftsView({ title, subtitle, perspective, list, re
         <p className="mt-1 text-sm text-muted">{subtitle}</p>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm">
+      {actionError && (
+        <div className="mb-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          {actionError}
+        </div>
+      )}
+
+      {/* Mobile: stacked cards */}
+      <div className="space-y-3 md:hidden">
+        {loading ? (
+          <p className="py-8 text-center text-sm text-muted">Yükleniyor...</p>
+        ) : rows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted">Vardiya bulunamadı.</p>
+        ) : (
+          rows.map((s) => (
+            <div key={s.id} className="rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-text">{otherName(s)}</p>
+                  <p className="text-xs text-muted">{formatDateTR(s.date)}</p>
+                </div>
+                <ClockPhaseBadge phase={s.clockPhase} />
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+                <dt className="text-muted">Planlanan</dt>
+                <dd className="text-right text-text">{timeRange(s.plannedStartTime, s.plannedEndTime)}</dd>
+                <dt className="text-muted">Benim bildirdiğim</dt>
+                <dd className="text-right text-text">{timeRange(myStart(s), myEnd(s))}</dd>
+                <dt className="text-muted">Onaylı saat</dt>
+                <dd className="text-right text-text">
+                  {s.approvedStartTime ? timeRange(s.approvedStartTime, s.approvedEndTime) : '—'}
+                </dd>
+                <dt className="text-muted">Durum</dt>
+                <dd className="text-right"><ShiftStatusBadge status={s.status} /></dd>
+              </dl>
+              <div className="mt-3">{renderActions(s)}</div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-muted">
-                <th className="px-4 py-3 font-medium">Tarih</th>
-                <th className="px-4 py-3 font-medium">{otherHeader}</th>
-                <th className="px-4 py-3 font-medium">Planlanan</th>
-                <th className="px-4 py-3 font-medium">Benim Bildirdiğim</th>
-                <th className="px-4 py-3 font-medium">Onaylı Saat</th>
-                <th className="px-4 py-3 font-medium">Onay Durumu</th>
-                <th className="px-4 py-3 font-medium">Durum</th>
-                <th className="px-4 py-3 text-right font-medium">İşlemler</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Tarih</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">{otherHeader}</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Planlanan</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Benim Bildirdiğim</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Onaylı Saat</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Mesai Durumu</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">Durum</th>
+                <th className="whitespace-nowrap px-4 py-3 text-right font-medium">İşlemler</th>
               </tr>
             </thead>
             <tbody>
@@ -160,7 +233,7 @@ export default function PartyShiftsView({ title, subtitle, perspective, list, re
               ) : (
                 rows.map((s) => (
                   <tr key={s.id} className="border-b border-slate-100 last:border-0 align-top">
-                    <td className="px-4 py-3 font-medium text-text">{formatDateTR(s.date)}</td>
+                    <td className="whitespace-nowrap px-4 py-3 font-medium text-text">{formatDateTR(s.date)}</td>
                     <td className="px-4 py-3 text-text">
                       {otherName(s)}
                       {perspective === 'courier' && s.segments.length > 0 && (
@@ -174,9 +247,9 @@ export default function PartyShiftsView({ title, subtitle, perspective, list, re
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-muted">{timeRange(s.plannedStartTime, s.plannedEndTime)}</td>
-                    <td className="px-4 py-3 text-muted">{timeRange(myStart(s), myEnd(s))}</td>
-                    <td className="px-4 py-3 text-text">
+                    <td className="whitespace-nowrap px-4 py-3 text-muted">{timeRange(s.plannedStartTime, s.plannedEndTime)}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-muted">{timeRange(myStart(s), myEnd(s))}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-text">
                       {s.approvedStartTime ? (
                         <>
                           {timeRange(s.approvedStartTime, s.approvedEndTime)}
@@ -188,17 +261,9 @@ export default function PartyShiftsView({ title, subtitle, perspective, list, re
                         <span className="text-muted">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3"><ConfirmationBadge status={s.confirmationStatus} /></td>
+                    <td className="px-4 py-3"><ClockPhaseBadge phase={s.clockPhase} /></td>
                     <td className="px-4 py-3"><ShiftStatusBadge status={s.status} /></td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => openReport(s)}
-                        disabled={s.status === 'CANCELLED'}
-                        className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50"
-                      >
-                        {s.confirmationStatus === 'ADMIN_APPROVED' ? 'Ek Mesai Bildir' : 'Saat Bildir'}
-                      </button>
-                    </td>
+                    <td className="px-4 py-3 text-right">{renderActions(s)}</td>
                   </tr>
                 ))
               )}
@@ -206,33 +271,6 @@ export default function PartyShiftsView({ title, subtitle, perspective, list, re
           </table>
         </div>
       </div>
-
-      <Modal open={confirmTarget != null} title="Vardiya Saatini Onayla" onClose={dismissConfirm}>
-        {confirmTarget && (
-          <div className="space-y-4">
-            {error && (
-              <div className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">{error}</div>
-            )}
-            <p className="text-sm text-text">
-              Yöneticinizin tanımladığı vardiya saatini onaylıyor musunuz?
-            </p>
-            <div className="rounded-lg bg-slate-50 p-3 text-sm">
-              <p><b>Tarih:</b> {formatDateTR(confirmTarget.date)}</p>
-              <p><b>Restoran:</b> {confirmTarget.restaurantName}</p>
-              <p><b>Vardiya saati:</b> {timeRange(confirmTarget.plannedStartTime, confirmTarget.plannedEndTime)}</p>
-            </div>
-            <p className="text-xs text-muted">
-              <b>Kabul Et:</b> bu saatleri aynen onaylar. <b>Farklı Saat Bildir:</b> ek mesai veya
-              farklı bir çıkış saati girersiniz.
-            </p>
-            <div className="flex flex-wrap justify-end gap-2 pt-2">
-              <button onClick={dismissConfirm} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-text hover:bg-slate-100">Daha Sonra</button>
-              <button onClick={editFromConfirm} className="rounded-lg border border-accent px-4 py-2 text-sm font-semibold text-accent hover:bg-accent/10">Farklı Saat Bildir</button>
-              <button onClick={() => void acceptPlanned()} disabled={accepting} className="rounded-lg bg-success px-4 py-2 text-sm font-semibold text-white hover:bg-success/90 disabled:opacity-60">{accepting ? 'Onaylanıyor...' : 'Kabul Et'}</button>
-            </div>
-          </div>
-        )}
-      </Modal>
 
       <Modal open={open} title="Saat Bildir" onClose={() => setOpen(false)}>
         {target && (
@@ -250,7 +288,7 @@ export default function PartyShiftsView({ title, subtitle, perspective, list, re
               <Field label="Çıkış Saati" type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
             </div>
             <p className="text-xs text-muted">
-              Bildirdiğiniz saatler karşı tarafın bildirimiyle eşleşirse durum “Eşleşti”, farklıysa
+              Bildirdiğiniz saatler restoranın onayıyla eşleşirse durum “Eşleşti”, farklıysa
               “Uyuşmazlık Var” olur ve yönetici nihai saati belirler.
             </p>
             {target.confirmationStatus === 'ADMIN_APPROVED' && (

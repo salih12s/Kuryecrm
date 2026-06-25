@@ -135,7 +135,51 @@ export default function CouriersPage() {
         searchPlaceholder="Kurye, telefon, plaka, kullanıcı adı ara..."
       />
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm">
+      {/* Mobile: stacked cards */}
+      <div className="space-y-3 md:hidden">
+        {loading ? (
+          <p className="py-8 text-center text-sm text-muted">Yükleniyor...</p>
+        ) : rows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted">Kayıt bulunamadı.</p>
+        ) : (
+          rows.map((c) => (
+            <div key={c.id} className="rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-text">{c.name}</p>
+                  <p className="text-xs text-muted">@{c.username}</p>
+                </div>
+                {c.approvalStatus === 'PENDING' ? (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">Onay Bekliyor</span>
+                ) : c.approvalStatus === 'REJECTED' ? (
+                  <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-medium text-danger">Reddedildi</span>
+                ) : (
+                  <span className="rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">Onaylı</span>
+                )}
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+                <dt className="text-muted">Telefon</dt>
+                <dd className="text-right text-text">{c.phone}</dd>
+                <dt className="text-muted">Plaka</dt>
+                <dd className="text-right text-text">{c.plate || '—'}</dd>
+                <dt className="text-muted">Saatlik Ücret</dt>
+                <dd className="text-right text-text">{formatTL(c.hourlyRate)}</dd>
+              </dl>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link to={`/admin/courier-payments?courierId=${c.id}`} className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white">Ödeme Yap</Link>
+                <Link to={`/admin/couriers/${c.id}/account`} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-text hover:bg-slate-100">Hesap Özeti</Link>
+                <button onClick={() => openEdit(c)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-text hover:bg-slate-100">Düzenle</button>
+                {isAdmin && (
+                  <button onClick={() => remove(c)} className="rounded-lg border border-danger/40 px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10">Sil</button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

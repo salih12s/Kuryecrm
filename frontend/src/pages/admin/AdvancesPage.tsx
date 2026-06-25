@@ -149,7 +149,39 @@ export default function AdvancesPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm">
+      {/* Mobile: stacked cards */}
+      <div className="space-y-3 md:hidden">
+        {loading ? (
+          <p className="py-8 text-center text-sm text-muted">Yükleniyor...</p>
+        ) : rows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted">Kayıt bulunamadı.</p>
+        ) : rows.map((a) => (
+          <div key={a.id} className="rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="font-semibold text-text">{a.courierName}</p>
+                <p className="text-xs text-muted">{formatDateTR(a.advanceDate)}</p>
+              </div>
+              <StatusPill status={a.status} />
+            </div>
+            <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+              <dt className="text-muted">Tutar</dt>
+              <dd className="text-right font-medium text-text">{formatTL(a.amount)}</dd>
+              <dt className="text-muted">Not</dt>
+              <dd className="text-right text-text">{a.note ?? '—'}</dd>
+            </dl>
+            {canEdit && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button onClick={() => openEdit(a)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-text hover:bg-slate-100">Düzenle</button>
+                <button onClick={() => toggle(a)} className={`rounded-md px-2.5 py-1 text-xs font-medium text-white ${a.status === 'ACTIVE' ? 'bg-danger hover:bg-danger/90' : 'bg-success hover:bg-success/90'}`}>{a.status === 'ACTIVE' ? 'İptal Et' : 'Aktif Et'}</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

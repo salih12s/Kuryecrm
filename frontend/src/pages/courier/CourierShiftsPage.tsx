@@ -7,10 +7,12 @@ export default function CourierShiftsPage() {
     <CourierLayout>
       <PartyShiftsView
         title="Vardiyalarım"
-        subtitle="Size atanmış vardiyalar. Başlangıç ve çıkış saatinizi bildirin."
+        subtitle="Mesaiye başlarken ve çıkış yaparken butona basın; restoran onayladığında saatler eşleşir."
         perspective="courier"
         list={() => courierShiftsApi.list()}
         report={(id, payload) => courierShiftsApi.reportTime(id, payload)}
+        clockIn={(id) => courierShiftsApi.clockIn(id)}
+        clockOut={(id) => courierShiftsApi.clockOut(id)}
       />
     </CourierLayout>
   );

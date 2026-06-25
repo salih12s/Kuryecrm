@@ -256,7 +256,48 @@ export default function RestaurantsPage() {
         searchPlaceholder="Restoran, yetkili, telefon, kullanıcı adı ara..."
       />
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm">
+      {/* Mobile: stacked cards */}
+      <div className="space-y-3 md:hidden">
+        {loading ? (
+          <p className="py-8 text-center text-sm text-muted">Yükleniyor...</p>
+        ) : rows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted">Kayıt bulunamadı.</p>
+        ) : rows.map((r) => (
+          <div key={r.id} className="rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="font-semibold text-text">{r.name}</p>
+                <p className="text-xs text-muted">@{r.username} · {r.authorizedPerson}</p>
+              </div>
+              {r.approvalStatus === 'PENDING' ? (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">Onay Bekliyor</span>
+              ) : r.approvalStatus === 'REJECTED' ? (
+                <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-medium text-danger">Reddedildi</span>
+              ) : (
+                <span className="rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">Onaylı</span>
+              )}
+            </div>
+            <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+              <dt className="text-muted">Telefon</dt>
+              <dd className="text-right text-text">{r.phone}</dd>
+              <dt className="text-muted">Saatlik Ücret</dt>
+              <dd className="text-right text-text">{formatTL(r.hourlyRate)}</dd>
+            </dl>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {r.latitude != null && r.longitude != null && (
+                <button type="button" onClick={() => setViewing(r)} className="inline-flex items-center gap-1 rounded-lg border border-success/30 bg-success/10 px-3 py-1.5 text-xs font-medium text-success hover:bg-success/20">📍 Haritada Gör</button>
+              )}
+              <button onClick={() => openEdit(r)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-text hover:bg-slate-100">Düzenle</button>
+              {isAdmin && (
+                <button onClick={() => remove(r)} className="rounded-lg border border-danger/40 px-3 py-1.5 text-xs font-medium text-danger hover:bg-danger/10">Sil</button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

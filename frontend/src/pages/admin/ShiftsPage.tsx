@@ -323,8 +323,50 @@ export default function ShiftsPage() {
         onSelect={(day) => setFilters({ ...filters, dateFrom: day ?? undefined, dateTo: day ?? undefined })}
       />
 
-      {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm">
+      {/* Mobile: stacked cards */}
+      <div className="space-y-3 md:hidden">
+        {loading ? (
+          <p className="py-8 text-center text-sm text-muted">Yükleniyor...</p>
+        ) : rows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted">Vardiya bulunamadı.</p>
+        ) : rows.map((s) => (
+          <div key={s.id} className="rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="font-semibold text-text">{s.restaurantName}</p>
+                <p className="text-xs text-muted">{s.courierName} · {formatDateTR(s.date)}</p>
+              </div>
+              <KebabMenu>
+                <KebabItem onClick={() => openApprove(s)} tone="success">Saat Onayla</KebabItem>
+                <KebabItem onClick={() => openEdit(s)}>Düzenle</KebabItem>
+                <KebabItem onClick={() => openSwitch(s)} disabled={s.status === 'CANCELLED'}>Restoran Değiştir</KebabItem>
+                <div className="my-1 border-t border-slate-100" />
+                <KebabItem onClick={() => changeStatus(s, 'PLANNED')} disabled={s.status === 'PLANNED'}>Planlandı işaretle</KebabItem>
+                <KebabItem onClick={() => changeStatus(s, 'IN_PROGRESS')} disabled={s.status === 'IN_PROGRESS'}>Devam Ediyor işaretle</KebabItem>
+                <KebabItem onClick={() => changeStatus(s, 'DISPUTED')} disabled={s.status === 'DISPUTED'}>Uyuşmazlık işaretle</KebabItem>
+                <div className="my-1 border-t border-slate-100" />
+                <KebabItem onClick={() => cancelShift(s)} tone="danger" disabled={s.status === 'CANCELLED'}>İptal Et</KebabItem>
+              </KebabMenu>
+            </div>
+            <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+              <dt className="text-muted">Planlanan</dt>
+              <dd className="text-right text-text">{timeRange(s.plannedStartTime, s.plannedEndTime)}</dd>
+              <dt className="text-muted">Kurye Bild.</dt>
+              <dd className="text-right text-text">{timeRange(s.courierReportedStartTime, s.courierReportedEndTime)}</dd>
+              <dt className="text-muted">Onaylı</dt>
+              <dd className="text-right text-text">{timeRange(s.approvedStartTime, s.approvedEndTime)}</dd>
+            </dl>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <ShiftStatusBadge status={s.status} />
+              <ConfirmationBadge status={s.confirmationStatus} />
+              <LateOvertimeCell shift={s} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>

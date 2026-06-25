@@ -106,7 +106,36 @@ export default function CourierPaymentsPage() {
       <Filter label="Durum"><select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="">Tümü</option><option value="ACTIVE">Aktif</option><option value="CANCELLED">İptal</option></select></Filter>
       {canEdit && <button onClick={openCreate} className="ml-auto rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">+ Ödeme Yap</button>}
     </div>
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="w-full text-sm"><thead><tr className="bg-slate-50 text-left text-muted">{['Tarih','Kurye','Tutar','Yöntem','Not','Durum','İşlemler'].map((h) => <th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody>
+    {/* Mobile: stacked cards */}
+    <div className="space-y-3 md:hidden">
+      {loading ? <p className="py-8 text-center text-sm text-muted">Yükleniyor...</p> : rows.length === 0 ? <p className="py-8 text-center text-sm text-muted">Ödeme kaydı yok.</p> : rows.map((payment) => (
+        <div key={payment.id} className="rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-semibold text-text">{payment.courierName}</p>
+              <p className="text-xs text-muted">{formatDateTR(payment.paymentDate)}{payment.method ? ` · ${payment.method}` : ''}</p>
+            </div>
+            <StatusPill status={payment.status} />
+          </div>
+          <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+            <dt className="text-muted">Tutar</dt>
+            <dd className="text-right font-medium text-text">{formatTL(payment.amount)}</dd>
+            <dt className="text-muted">Not</dt>
+            <dd className="text-right text-text">{payment.note ?? '—'}</dd>
+          </dl>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {canEdit && <>
+              <button onClick={() => openEdit(payment)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs">Düzenle</button>
+              <button onClick={() => toggle(payment)} className={`rounded-md px-2.5 py-1 text-xs text-white ${payment.status === 'ACTIVE' ? 'bg-danger' : 'bg-success'}`}>{payment.status === 'ACTIVE' ? 'İptal Et' : 'Aktif Et'}</button>
+            </>}
+            <Link to={`/admin/couriers/${payment.courierId}/account`} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs">Hesap</Link>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* Desktop: table */}
+    <div className="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white md:block"><table className="w-full text-sm"><thead><tr className="bg-slate-50 text-left text-muted">{['Tarih','Kurye','Tutar','Yöntem','Not','Durum','İşlemler'].map((h) => <th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody>
       {loading ? <tr><td colSpan={7} className="px-4 py-8 text-center text-muted">Yükleniyor...</td></tr> : rows.length === 0 ? <tr><td colSpan={7} className="px-4 py-8 text-center text-muted">Ödeme kaydı yok.</td></tr> : rows.map((payment) => <tr key={payment.id} className="border-t"><td className="px-4 py-3">{formatDateTR(payment.paymentDate)}</td><td className="px-4">{payment.courierName}</td><td className="px-4">{formatTL(payment.amount)}</td><td className="px-4">{payment.method ?? '—'}</td><td className="px-4">{payment.note ?? '—'}</td><td className="px-4"><StatusPill status={payment.status} /></td><td className="px-4"><div className="flex gap-2">{canEdit && <><button onClick={() => openEdit(payment)} className="rounded-md border px-2.5 py-1 text-xs">Düzenle</button><button onClick={() => toggle(payment)} className={`rounded-md px-2.5 py-1 text-xs text-white ${payment.status === 'ACTIVE' ? 'bg-danger' : 'bg-success'}`}>{payment.status === 'ACTIVE' ? 'İptal Et' : 'Aktif Et'}</button></>}<Link to={`/admin/couriers/${payment.courierId}/account`} className="rounded-md border px-2.5 py-1 text-xs">Hesap</Link></div></td></tr>)}
     </tbody></table></div>
 

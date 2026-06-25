@@ -14,6 +14,12 @@ import { PartyShiftQueryDto } from './dto/shift-query.dto';
 export class CourierShiftsController {
   constructor(private readonly shifts: ShiftsService) {}
 
+  // Declared before ':id' so it is not captured as a shift id.
+  @Get('waiting-count')
+  waitingCount(@CurrentUser() user: AuthUser) {
+    return this.shifts.courierWaitingCount(user.userId);
+  }
+
   @Get()
   findAll(@CurrentUser() user: AuthUser, @Query() query: PartyShiftQueryDto) {
     return this.shifts.courierFindAll(user.userId, query);

@@ -72,6 +72,21 @@ export default function ApprovalsPage() {
             {data!.couriers.length === 0 ? (
               <Empty>Bekleyen kurye yok.</Empty>
             ) : (
+              <>
+              <div className="space-y-3 md:hidden">
+                {data!.couriers.map((c) => (
+                  <ApprovalCard
+                    key={c.id}
+                    title={c.name}
+                    subtitle={`@${c.username}`}
+                    rate={c.hourlyRate}
+                    rows={[['Telefon', c.phone], ['Plaka', c.plate || '—']]}
+                    disabled={busyId === c.id}
+                    onApprove={() => decide('courier', c.id, 'approve')}
+                    onReject={() => decide('courier', c.id, 'reject')}
+                  />
+                ))}
+              </div>
               <Table headers={['Ad', 'Kullanıcı Adı', 'Telefon', 'Plaka', 'Saatlik Ücret', '']}>
                 {data!.couriers.map((c) => (
                   <tr key={c.id} className="border-b border-slate-100 last:border-0">
@@ -84,6 +99,7 @@ export default function ApprovalsPage() {
                   </tr>
                 ))}
               </Table>
+              </>
             )}
           </Section>
 
@@ -92,6 +108,21 @@ export default function ApprovalsPage() {
             {data!.restaurants.length === 0 ? (
               <Empty>Bekleyen restoran yok.</Empty>
             ) : (
+              <>
+              <div className="space-y-3 md:hidden">
+                {data!.restaurants.map((r) => (
+                  <ApprovalCard
+                    key={r.id}
+                    title={r.name}
+                    subtitle={`@${r.username}`}
+                    rate={r.hourlyRate}
+                    rows={[['Yetkili', r.authorizedPerson], ['Telefon', r.phone]]}
+                    disabled={busyId === r.id}
+                    onApprove={() => decide('restaurant', r.id, 'approve')}
+                    onReject={() => decide('restaurant', r.id, 'reject')}
+                  />
+                ))}
+              </div>
               <Table headers={['Ad', 'Kullanıcı Adı', 'Yetkili', 'Telefon', 'Saatlik Ücret', '']}>
                 {data!.restaurants.map((r) => (
                   <tr key={r.id} className="border-b border-slate-100 last:border-0">
@@ -104,6 +135,7 @@ export default function ApprovalsPage() {
                   </tr>
                 ))}
               </Table>
+              </>
             )}
           </Section>
         </div>
@@ -121,9 +153,51 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+function ApprovalCard({
+  title,
+  subtitle,
+  rate,
+  rows,
+  disabled,
+  onApprove,
+  onReject,
+}: {
+  title: string;
+  subtitle: string;
+  rate: string;
+  rows: [string, string][];
+  disabled: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-card p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="font-semibold text-text">{title}</p>
+          <p className="text-xs text-muted">{subtitle}</p>
+        </div>
+        <span className="text-sm font-medium text-text">{formatTL(rate)}</span>
+      </div>
+      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+        {rows.map(([k, v]) => (
+          <div key={k} className="contents">
+            <dt className="text-muted">{k}</dt>
+            <dd className="text-right text-text">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="mt-3 flex gap-2">
+        <button onClick={onApprove} disabled={disabled} className="flex-1 rounded-lg bg-success px-3 py-2 text-xs font-medium text-white hover:bg-success/90 disabled:opacity-60">Onayla</button>
+        <button onClick={onReject} disabled={disabled} className="flex-1 rounded-lg bg-danger px-3 py-2 text-xs font-medium text-white hover:bg-danger/90 disabled:opacity-60">Reddet</button>
+      </div>
+    </div>
+  );
+}
+
 function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm">
+    <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-card shadow-sm md:block">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>

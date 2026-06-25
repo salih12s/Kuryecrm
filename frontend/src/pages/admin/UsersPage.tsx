@@ -127,7 +127,29 @@ function UserSection({ title, description, rows, currentUserId, onUpdate, allowR
         <p className="text-xs text-muted">{description}</p>
       </div>
       {rows.length === 0 ? <p className="p-6 text-center text-sm text-muted">Henüz kullanıcı yok.</p> : (
-        <div className="overflow-x-auto">
+        <>
+        {/* Mobile: stacked cards */}
+        <div className="space-y-3 p-4 md:hidden">
+          {rows.map((item) => (
+            <div key={item.id} className="rounded-lg border border-slate-200 p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-medium text-text">{item.profile?.name ?? item.name}{item.id === currentUserId && <span className="ml-2 text-xs text-accent">Siz</span>}</p>
+                  <p className="text-xs text-muted">@{item.username}</p>
+                </div>
+                <button disabled={item.id === currentUserId} onClick={() => void onUpdate(item, { isActive: !item.isActive })} className={`rounded-full px-3 py-1 text-xs font-semibold disabled:opacity-50 ${item.isActive ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>{item.isActive ? 'Aktif' : 'Pasif'}</button>
+              </div>
+              <div className="mt-2">
+                {allowRole ? <select value={item.role} disabled={item.id === currentUserId} onChange={(e) => void onUpdate(item, { role: e.target.value as Role })} className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs disabled:bg-slate-100">
+                  {MANAGEMENT_ROLES.map((role) => <option key={role} value={role}>{ROLE_LABELS[role]}</option>)}
+                </select> : <span className="inline-block rounded-full bg-slate-100 px-2 py-1 text-xs text-text">{ROLE_LABELS[item.role]}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop: table */}
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-muted"><tr><th className="px-4 py-3 font-medium">Ad</th><th className="px-4 py-3 font-medium">Kullanıcı Adı</th><th className="px-4 py-3 font-medium">Yetki</th><th className="px-4 py-3 font-medium">Giriş Durumu</th></tr></thead>
             <tbody>{rows.map((item) => (
@@ -144,6 +166,7 @@ function UserSection({ title, description, rows, currentUserId, onUpdate, allowR
             ))}</tbody>
           </table>
         </div>
+        </>
       )}
     </section>
   );
