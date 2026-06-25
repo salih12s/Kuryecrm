@@ -262,6 +262,7 @@ export class ReportsService {
   async restaurantReport(startDate: string, endDate: string) {
     const [restaurants, shifts] = await Promise.all([
       this.prisma.restaurant.findMany({
+        where: { deletedAt: null },
         orderBy: { name: 'asc' },
         include: {
           invoices: { where: { invoiceDate: { gte: startDate, lte: endDate }, status: { not: InvoiceStatus.CANCELLED } } },
@@ -304,6 +305,7 @@ export class ReportsService {
 
   async courierReport(startDate: string, endDate: string) {
     const couriers = await this.prisma.courier.findMany({
+      where: { deletedAt: null },
       orderBy: { name: 'asc' },
       include: {
         shifts: { where: { ...APPROVED, date: { gte: startDate, lte: endDate } } },

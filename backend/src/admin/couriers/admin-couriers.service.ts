@@ -42,11 +42,11 @@ export class AdminCouriersService {
   }
 
   async findAll(query: ListQueryDto) {
-    // All records show in the list (including pending ones, flagged with their
-    // approval status in the UI) so the creator can still see what they added.
-    // The optional active/passive filter is still used by other screens (e.g.
-    // shift dropdowns request only active = approved & enabled records).
-    const where: Prisma.CourierWhereInput = {};
+    // All non-deleted records show in the list (including pending ones, flagged
+    // with their approval status in the UI). The optional active/passive filter
+    // is still used by other screens (e.g. shift dropdowns request only
+    // active = approved & enabled records).
+    const where: Prisma.CourierWhereInput = { deletedAt: null };
 
     if (query.status === 'active') where.isActive = true;
     else if (query.status === 'passive') where.isActive = false;
@@ -177,16 +177,32 @@ export class AdminCouriersService {
   }
 
   /**
-   * Permanently deletes a courier and its linked login user. Deleting the user
-   * cascades (schema onDelete: Cascade) to the courier and all of its shifts,
-   * advances, payments and locations.
+   * Soft-deletes a courier: it disappears from the management lists and can no
+   * longer log in, but its shifts, advances and payments stay in the database
+   * so historical reports are unaffected. The login username is freed (suffixed)
+   * so a new courier can reuse it later.
    */
   async remove(id: string) {
-    const courier = await this.prisma.courier.findUnique({ where: { id } });
+    const courier = await this.prisma.courier.findUnique({
+      where: { id },
+      include: { user: { select: { username: true } } },
+    });
     if (!courier) {
       throw new NotFoundException('Kurye bulunamadı.');
     }
-    await this.prisma.user.delete({ where: { id: courier.userId } });
+    if (courier.deletedAt) return { id };
+
+    const freedUsername = `${courier.user.username}__del_${Date.now()}`;
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: courier.userId },
+        data: { isActive: false, username: freedUsername },
+      }),
+      this.prisma.courier.update({
+        where: { id },
+        data: { isActive: false, deletedAt: new Date() },
+      }),
+    ]);
     return { id };
   }
 

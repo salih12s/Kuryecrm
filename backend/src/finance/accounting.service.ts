@@ -248,6 +248,7 @@ export class AccountingService {
     const paymentRange = paymentDateFilter(from, to);
     const [restaurants, shifts] = await Promise.all([
       this.prisma.restaurant.findMany({
+        where: { deletedAt: null },
         orderBy: [{ name: 'asc' }],
         include: {
           invoices: { select: { amount: true, status: true } },

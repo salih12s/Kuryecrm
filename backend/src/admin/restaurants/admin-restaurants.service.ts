@@ -51,11 +51,11 @@ export class AdminRestaurantsService {
   }
 
   async findAll(query: ListQueryDto) {
-    // All records show in the list (including pending ones, flagged with their
-    // approval status in the UI) so the creator can still see what they added.
-    // The optional active/passive filter is still used by other screens (e.g.
-    // shift dropdowns request only active = approved & enabled records).
-    const where: Prisma.RestaurantWhereInput = {};
+    // All non-deleted records show in the list (including pending ones, flagged
+    // with their approval status in the UI). The optional active/passive filter
+    // is still used by other screens (e.g. shift dropdowns request only
+    // active = approved & enabled records).
+    const where: Prisma.RestaurantWhereInput = { deletedAt: null };
 
     if (query.status === 'active') where.isActive = true;
     else if (query.status === 'passive') where.isActive = false;
@@ -197,16 +197,32 @@ export class AdminRestaurantsService {
   }
 
   /**
-   * Permanently deletes a restaurant and its linked login user. Deleting the
-   * user cascades (schema onDelete: Cascade) to the restaurant and all of its
-   * shifts, segments, invoices, payments and locations.
+   * Soft-deletes a restaurant: it disappears from the management lists and can
+   * no longer log in, but its shifts, invoices and payments stay in the
+   * database so historical reports are unaffected. The login username is freed
+   * (suffixed) so a new restaurant can reuse it later.
    */
   async remove(id: string) {
-    const restaurant = await this.prisma.restaurant.findUnique({ where: { id } });
+    const restaurant = await this.prisma.restaurant.findUnique({
+      where: { id },
+      include: { user: { select: { username: true } } },
+    });
     if (!restaurant) {
       throw new NotFoundException('Restoran bulunamadı.');
     }
-    await this.prisma.user.delete({ where: { id: restaurant.userId } });
+    if (restaurant.deletedAt) return { id };
+
+    const freedUsername = `${restaurant.user.username}__del_${Date.now()}`;
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: restaurant.userId },
+        data: { isActive: false, username: freedUsername },
+      }),
+      this.prisma.restaurant.update({
+        where: { id },
+        data: { isActive: false, deletedAt: new Date() },
+      }),
+    ]);
     return { id };
   }
 
