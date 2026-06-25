@@ -4,7 +4,7 @@ import AdminLayout from '../../components/admin/AdminLayout';
 import Field from '../../components/admin/Field';
 import Modal from '../../components/Modal';
 import { useAuth } from '../../context/AuthContext';
-import { usersApi } from '../../lib/adminApi';
+import { authApi, usersApi } from '../../lib/adminApi';
 import type { AdminUser, Role } from '../../types';
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -21,9 +21,16 @@ export default function UsersPage() {
   const [rows, setRows] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: '', username: '', password: '', role: 'KURYE_SEFI' as Role, isActive: true });
+  const [selfPasswordOpen, setSelfPasswordOpen] = useState(false);
+  const [selfPasswordForm, setSelfPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [passwordTarget, setPasswordTarget] = useState<AdminUser | null>(null);
+  const [resetPasswordForm, setResetPasswordForm] = useState({ password: '', confirmPassword: '' });
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   const load = async () => {
     try {
@@ -41,10 +48,12 @@ export default function UsersPage() {
     event.preventDefault();
     setSaving(true);
     setError('');
+    setSuccess('');
     try {
       await usersApi.create(form);
       setModalOpen(false);
       setForm({ name: '', username: '', password: '', role: 'KURYE_SEFI', isActive: true });
+      setSuccess('Kullanıcı oluşturuldu.');
       await load();
     } catch (caught) {
       setError(messageOf(caught));
@@ -55,11 +64,86 @@ export default function UsersPage() {
 
   const update = async (target: AdminUser, changes: Partial<{ role: Role; isActive: boolean }>) => {
     setError('');
+    setSuccess('');
     try {
       const updated = await usersApi.update(target.id, changes);
       setRows((current) => current.map((item) => item.id === target.id ? updated : item));
     } catch (caught) {
       setError(messageOf(caught));
+    }
+  };
+
+  const openSelfPassword = () => {
+    setError('');
+    setSuccess('');
+    setPasswordError('');
+    setSelfPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    setSelfPasswordOpen(true);
+  };
+
+  const closeSelfPassword = () => {
+    setSelfPasswordOpen(false);
+    setPasswordError('');
+    setSelfPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  };
+
+  const openResetPassword = (target: AdminUser) => {
+    setError('');
+    setSuccess('');
+    setPasswordError('');
+    setResetPasswordForm({ password: '', confirmPassword: '' });
+    setPasswordTarget(target);
+  };
+
+  const closeResetPassword = () => {
+    setPasswordTarget(null);
+    setPasswordError('');
+    setResetPasswordForm({ password: '', confirmPassword: '' });
+  };
+
+  const changeOwnPassword = async (event: FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setSuccess('');
+    setPasswordError('');
+    if (selfPasswordForm.newPassword !== selfPasswordForm.confirmPassword) {
+      setPasswordError('Yeni şifreler eşleşmiyor.');
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      await authApi.changePassword({
+        currentPassword: selfPasswordForm.currentPassword,
+        newPassword: selfPasswordForm.newPassword,
+      });
+      closeSelfPassword();
+      setSuccess('Şifreniz değiştirildi.');
+    } catch (caught) {
+      setPasswordError(messageOf(caught));
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  const resetUserPassword = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!passwordTarget) return;
+    setError('');
+    setSuccess('');
+    setPasswordError('');
+    if (resetPasswordForm.password !== resetPasswordForm.confirmPassword) {
+      setPasswordError('Yeni şifreler eşleşmiyor.');
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      await usersApi.update(passwordTarget.id, { password: resetPasswordForm.password });
+      closeResetPassword();
+      setSuccess(`${passwordTarget.username} için yeni şifre kaydedildi.`);
+    } catch (caught) {
+      setPasswordError(messageOf(caught));
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -74,17 +158,23 @@ export default function UsersPage() {
           <h1 className="text-2xl font-bold text-primary">Kullanıcılar</h1>
           <p className="mt-1 text-sm text-muted">Hesapları, giriş yetkilerini ve yönetim rollerini belirleyin.</p>
         </div>
-        <button onClick={() => setModalOpen(true)} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90">
-          + Yönetim Kullanıcısı
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={openSelfPassword} className="rounded-lg border border-accent px-4 py-2 text-sm font-semibold text-accent hover:bg-accent/10">
+            Şifremi Değiştir
+          </button>
+          <button onClick={() => setModalOpen(true)} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90">
+            + Yönetim Kullanıcısı
+          </button>
+        </div>
       </div>
 
       {error && <div className="mb-4 rounded-lg border border-danger/20 bg-danger/10 p-3 text-sm text-danger">{error}</div>}
+      {success && <div className="mb-4 rounded-lg border border-success/20 bg-success/10 p-3 text-sm text-success">{success}</div>}
       {loading ? <p className="py-12 text-center text-muted">Kullanıcılar yükleniyor...</p> : (
         <div className="space-y-6">
-          <UserSection title="Yönetim Kullanıcıları" description="Admin, Kurye Şefi ve Ortak hesapları" rows={management} currentUserId={currentUser?.id} onUpdate={update} allowRole />
-          <UserSection title="Restoran Kullanıcıları" description="Restoranlar sayfasından oluşturulan hesaplar" rows={restaurants} currentUserId={currentUser?.id} onUpdate={update} />
-          <UserSection title="Kurye Kullanıcıları" description="Kuryeler sayfasından oluşturulan hesaplar" rows={couriers} currentUserId={currentUser?.id} onUpdate={update} />
+          <UserSection title="Yönetim Kullanıcıları" description="Admin, Kurye Şefi ve Ortak hesapları" rows={management} currentUserId={currentUser?.id} onUpdate={update} onResetPassword={openResetPassword} allowRole />
+          <UserSection title="Restoran Kullanıcıları" description="Restoranlar sayfasından oluşturulan hesaplar" rows={restaurants} currentUserId={currentUser?.id} onUpdate={update} onResetPassword={openResetPassword} />
+          <UserSection title="Kurye Kullanıcıları" description="Kuryeler sayfasından oluşturulan hesaplar" rows={couriers} currentUserId={currentUser?.id} onUpdate={update} onResetPassword={openResetPassword} />
         </div>
       )}
 
@@ -108,16 +198,46 @@ export default function UsersPage() {
           </div>
         </form>
       </Modal>
+
+      <Modal open={selfPasswordOpen} title="Şifremi Değiştir" onClose={closeSelfPassword}>
+        <form onSubmit={changeOwnPassword} className="space-y-4">
+          {passwordError && <div className="rounded-lg border border-danger/20 bg-danger/10 p-3 text-sm text-danger">{passwordError}</div>}
+          <Field label="Mevcut Şifre" type="password" required value={selfPasswordForm.currentPassword} onChange={(e) => setSelfPasswordForm({ ...selfPasswordForm, currentPassword: e.target.value })} />
+          <Field label="Yeni Şifre" type="password" required minLength={6} value={selfPasswordForm.newPassword} onChange={(e) => setSelfPasswordForm({ ...selfPasswordForm, newPassword: e.target.value })} />
+          <Field label="Yeni Şifre Tekrar" type="password" required minLength={6} value={selfPasswordForm.confirmPassword} onChange={(e) => setSelfPasswordForm({ ...selfPasswordForm, confirmPassword: e.target.value })} />
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={closeSelfPassword} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">Vazgeç</button>
+            <button disabled={passwordSaving} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{passwordSaving ? 'Kaydediliyor...' : 'Kaydet'}</button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={!!passwordTarget} title="Kullanıcı Şifresini Yenile" onClose={closeResetPassword}>
+        <form onSubmit={resetUserPassword} className="space-y-4">
+          {passwordError && <div className="rounded-lg border border-danger/20 bg-danger/10 p-3 text-sm text-danger">{passwordError}</div>}
+          <div className="rounded-lg bg-slate-50 p-3 text-sm text-text">
+            <span className="font-semibold">{passwordTarget?.profile?.name ?? passwordTarget?.name}</span>
+            <span className="ml-2 text-muted">@{passwordTarget?.username}</span>
+          </div>
+          <Field label="Yeni Şifre" type="password" required minLength={6} value={resetPasswordForm.password} onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, password: e.target.value })} />
+          <Field label="Yeni Şifre Tekrar" type="password" required minLength={6} value={resetPasswordForm.confirmPassword} onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, confirmPassword: e.target.value })} />
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={closeResetPassword} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">Vazgeç</button>
+            <button disabled={passwordSaving} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{passwordSaving ? 'Kaydediliyor...' : 'Kaydet'}</button>
+          </div>
+        </form>
+      </Modal>
     </AdminLayout>
   );
 }
 
-function UserSection({ title, description, rows, currentUserId, onUpdate, allowRole = false }: {
+function UserSection({ title, description, rows, currentUserId, onUpdate, onResetPassword, allowRole = false }: {
   title: string;
   description: string;
   rows: AdminUser[];
   currentUserId?: string;
   onUpdate: (user: AdminUser, changes: Partial<{ role: Role; isActive: boolean }>) => Promise<void>;
+  onResetPassword: (user: AdminUser) => void;
   allowRole?: boolean;
 }) {
   return (
@@ -144,6 +264,11 @@ function UserSection({ title, description, rows, currentUserId, onUpdate, allowR
                   {MANAGEMENT_ROLES.map((role) => <option key={role} value={role}>{ROLE_LABELS[role]}</option>)}
                 </select> : <span className="inline-block rounded-full bg-slate-100 px-2 py-1 text-xs text-text">{ROLE_LABELS[item.role]}</span>}
               </div>
+              {item.id !== currentUserId && (
+                <button onClick={() => onResetPassword(item)} className="mt-3 w-full rounded-lg border border-accent px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/10">
+                  Şifre Yenile
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -151,7 +276,7 @@ function UserSection({ title, description, rows, currentUserId, onUpdate, allowR
         {/* Desktop: table */}
         <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-muted"><tr><th className="px-4 py-3 font-medium">Ad</th><th className="px-4 py-3 font-medium">Kullanıcı Adı</th><th className="px-4 py-3 font-medium">Yetki</th><th className="px-4 py-3 font-medium">Giriş Durumu</th></tr></thead>
+            <thead className="bg-slate-50 text-left text-muted"><tr><th className="px-4 py-3 font-medium">Ad</th><th className="px-4 py-3 font-medium">Kullanıcı Adı</th><th className="px-4 py-3 font-medium">Yetki</th><th className="px-4 py-3 font-medium">Giriş Durumu</th><th className="px-4 py-3 font-medium">İşlemler</th></tr></thead>
             <tbody>{rows.map((item) => (
               <tr key={item.id} className="border-t border-slate-100">
                 <td className="px-4 py-3 font-medium text-text">{item.profile?.name ?? item.name}{item.id === currentUserId && <span className="ml-2 text-xs text-accent">Siz</span>}</td>
@@ -162,6 +287,15 @@ function UserSection({ title, description, rows, currentUserId, onUpdate, allowR
                   </select> : <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-text">{ROLE_LABELS[item.role]}</span>}
                 </td>
                 <td className="px-4 py-3"><button disabled={item.id === currentUserId} onClick={() => void onUpdate(item, { isActive: !item.isActive })} className={`rounded-full px-3 py-1 text-xs font-semibold disabled:opacity-50 ${item.isActive ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>{item.isActive ? 'Aktif' : 'Pasif'}</button></td>
+                <td className="px-4 py-3">
+                  {item.id !== currentUserId ? (
+                    <button onClick={() => onResetPassword(item)} className="rounded-lg border border-accent px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/10">
+                      Şifre Yenile
+                    </button>
+                  ) : (
+                    <span className="text-xs text-muted">-</span>
+                  )}
+                </td>
               </tr>
             ))}</tbody>
           </table>

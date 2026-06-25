@@ -90,3 +90,8 @@ export const usersApi = {
   update: async (id: string, payload: Partial<{ name: string; username: string; password: string; role: Role; isActive: boolean }>) =>
     (await api.patch<AdminUser>(`/admin/users/${id}`, clean(payload))).data,
 };
+
+export const authApi = {
+  changePassword: async (payload: { currentPassword: string; newPassword: string }) =>
+    (await api.patch<{ ok: boolean }>('/auth/me/password', payload)).data,
+};

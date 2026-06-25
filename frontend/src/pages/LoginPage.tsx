@@ -39,14 +39,14 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <img src="/logo.png" alt="Geliyo" className="mx-auto mb-4 h-16 w-16 rounded-2xl object-cover shadow-sm" />
-          <h1 className="text-2xl font-bold text-primary">Geliyo</h1>
+          <img src="/logo.png" alt="Geliyo" className="mx-auto mb-4 h-16 w-16 rounded-2xl object-cover shadow-sm ring-4 ring-accent/10" />
+          <h1 className="text-2xl font-bold text-accent">Geliyo</h1>
           <p className="mt-1 text-sm text-muted">Kurye &amp; Restoran Operasyon Sistemi</p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="rounded-2xl border border-slate-200 bg-card p-8 shadow-sm"
+          className="rounded-2xl border border-accent/15 border-t-4 border-t-accent bg-card p-8 shadow-sm"
         >
           <h2 className="mb-6 text-lg font-semibold text-text">Giriş Yap</h2>
 

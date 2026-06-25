@@ -78,7 +78,7 @@ export default function DashboardLayout({ brand, navItems = [], navSections, chi
           `${baseItem} flex items-center gap-3 ${
             isActive
               ? 'bg-accent font-semibold text-white shadow-sm'
-              : 'text-slate-300 hover:bg-white/10 hover:text-white'
+              : 'text-slate-700 hover:bg-accent/10 hover:text-accent'
           }`
         }
       >
@@ -103,15 +103,15 @@ export default function DashboardLayout({ brand, navItems = [], navSections, chi
     <div className="flex min-h-screen bg-background text-text">
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-30 flex w-64 transform flex-col bg-primary text-white shadow-xl transition-transform duration-200 md:sticky md:top-0 md:h-screen md:translate-x-0 md:shadow-none ${
+        className={`fixed inset-y-0 left-0 z-30 flex w-64 transform flex-col border-r border-accent/15 bg-[#ffe8e6] text-text shadow-xl transition-transform duration-200 md:sticky md:top-0 md:h-screen md:translate-x-0 md:shadow-none ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-white/10 px-4">
+        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-accent/10 px-4">
           <img src="/logo.png" alt={brand} className="h-9 w-9 shrink-0 rounded-xl object-cover shadow-sm" />
           <div>
             <span className="block text-base font-semibold leading-tight">{brand}</span>
-            <span className="block text-[11px] text-slate-400">İş yönetim paneli</span>
+            <span className="block text-[11px] text-muted">İş yönetim paneli</span>
           </div>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-3" aria-label="Ana menü">
@@ -131,7 +131,7 @@ export default function DashboardLayout({ brand, navItems = [], navSections, chi
                       )
                     }
                     className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors ${
-                      hasActiveItem ? 'bg-white/10 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                      hasActiveItem ? 'bg-accent/10 text-accent' : 'text-slate-700 hover:bg-accent/10 hover:text-accent'
                     }`}
                     aria-expanded={isOpen}
                   >
@@ -139,12 +139,12 @@ export default function DashboardLayout({ brand, navItems = [], navSections, chi
                     <span className={`text-xs transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true">⌄</span>
                   </button>
                 ) : section.label ? (
-                  <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted">
                     {section.label}
                   </p>
                 ) : null}
                 {isOpen && (
-                  <div className={`space-y-1 ${section.collapsible ? 'mt-1 border-l border-white/10 pl-2' : ''}`}>
+                  <div className={`space-y-1 ${section.collapsible ? 'mt-1 border-l border-accent/10 pl-2' : ''}`}>
                     {section.items.map(renderItem)}
                   </div>
                 )}
@@ -152,9 +152,9 @@ export default function DashboardLayout({ brand, navItems = [], navSections, chi
             );
           })}
         </nav>
-        <div className="shrink-0 border-t border-white/10 px-4 py-3">
+        <div className="shrink-0 border-t border-accent/10 px-4 py-3">
           <p className="truncate text-sm font-medium">{user?.name}</p>
-          <p className="text-xs text-slate-400">{user ? ROLE_LABELS[user.role] ?? user.role : ''}</p>
+          <p className="text-xs text-muted">{user ? ROLE_LABELS[user.role] ?? user.role : ''}</p>
         </div>
       </aside>
 
@@ -168,7 +168,7 @@ export default function DashboardLayout({ brand, navItems = [], navSections, chi
 
       {/* Main column */}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-card px-4 md:px-8">
+        <header className="flex h-16 items-center justify-between border-b border-accent/10 bg-card px-4 md:px-8">
           <button
             className="rounded-md p-2 text-muted hover:bg-slate-100 md:hidden"
             onClick={() => setSidebarOpen((v) => !v)}

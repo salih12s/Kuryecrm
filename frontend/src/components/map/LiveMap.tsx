@@ -31,7 +31,7 @@ function AutoFit({ points, courierCount }: { points: [number, number][]; courier
   return null;
 }
 
-const RESTAURANT_ICON = dotIcon('#dc2626'); // red
+const RESTAURANT_ICON = dotIcon('#E4150F'); // brand red
 const ONLINE_ICON = dotIcon('#2563eb'); // blue (courier online)
 const OFFLINE_ICON = dotIcon('#94a3b8'); // gray (courier offline / no recent ping)
 

@@ -4,7 +4,7 @@ import { DEFAULT_CENTER, L } from '../../lib/leaflet-setup';
 
 const PICKER_ICON = L.divIcon({
   className: '',
-  html: '<span style="display:grid;place-items:center;width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#E11414;border:3px solid #fff;box-shadow:0 2px 7px rgba(15,23,42,.45)"><i style="display:block;width:8px;height:8px;border-radius:9999px;background:#fff"></i></span>',
+  html: '<span style="display:grid;place-items:center;width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#E4150F;border:3px solid #fff;box-shadow:0 2px 7px rgba(15,23,42,.45)"><i style="display:block;width:8px;height:8px;border-radius:9999px;background:#fff"></i></span>',
   iconSize: [30, 38],
   iconAnchor: [15, 34],
 });

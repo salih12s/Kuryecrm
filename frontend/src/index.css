@@ -23,10 +23,10 @@
   white-space: nowrap;
 }
 .leaflet-tooltip.restaurant-label {
-  background: #dc2626;
+  background: #e4150f;
 }
 .leaflet-tooltip.restaurant-label::before {
-  border-top-color: #dc2626;
+  border-top-color: #e4150f;
 }
 .leaflet-tooltip.courier-label {
   background: #2563eb;
@@ -43,7 +43,7 @@ body,
 
 body {
   margin: 0;
-  background-color: #f8fafc;
+  background-color: #ffeceb;
   color: #1e293b;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
     sans-serif;
