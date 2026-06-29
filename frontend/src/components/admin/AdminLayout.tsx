@@ -36,6 +36,17 @@ const FINANCE_SECTION: NavSection = {
   ],
 };
 
+// Stock: motorcycle register + accessory (bag) buy/sell with profit. Financial
+// in nature, so shown to admin and partners alongside finance.
+const STOCK_SECTION: NavSection = {
+  label: 'Stok',
+  collapsible: true,
+  items: [
+    { label: 'Motorlar', to: '/admin/stock/motorcycles' },
+    { label: 'Aksesuarlar', to: '/admin/stock/accessories' },
+  ],
+};
+
 // Full admin navigation.
 const ADMIN_NAV: NavSection[] = [
   { items: [{ label: 'Genel Bakış', to: '/admin' }] },
@@ -46,6 +57,7 @@ const ADMIN_NAV: NavSection[] = [
   },
   REPORTS_SECTION,
   FINANCE_SECTION,
+  STOCK_SECTION,
   {
     label: 'Sistem',
     items: [
@@ -58,8 +70,8 @@ const ADMIN_NAV: NavSection[] = [
 // Kurye Şefi: operations only (incl. live map). No reports/finance/approvals/settings.
 const KURYE_SEFI_NAV: NavSection[] = [OPERATION_SECTION];
 
-// Ortaklar (Partner): finance + financial reports only. No operations/map/settings.
-const PARTNER_NAV: NavSection[] = [FINANCE_SECTION, REPORTS_SECTION];
+// Ortaklar (Partner): finance + financial reports + stock. No operations/map/settings.
+const PARTNER_NAV: NavSection[] = [FINANCE_SECTION, STOCK_SECTION, REPORTS_SECTION];
 
 function navFor(role?: string): NavSection[] {
   if (role === 'KURYE_SEFI') return KURYE_SEFI_NAV;

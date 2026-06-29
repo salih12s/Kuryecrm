@@ -8,6 +8,7 @@ import { CourierModule } from './courier/courier.module';
 import { ShiftsModule } from './shifts/shifts.module';
 import { FinanceModule } from './finance/finance.module';
 import { ReportsModule } from './reports/reports.module';
+import { StockModule } from './stock/stock.module';
 import { SettingsModule } from './settings/settings.module';
 import { TrackingModule } from './tracking/tracking.module';
 import { AppController } from './app.controller';
@@ -31,6 +32,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
     ShiftsModule,
     FinanceModule,
     ReportsModule,
+    StockModule,
     TrackingModule,
   ],
   controllers: [AppController],

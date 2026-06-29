@@ -6,7 +6,13 @@
     "node": ">=20"
   },
   "scripts": {
+    "dev": "concurrently -n backend,frontend -c blue,magenta \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
     "build": "npm ci --include=dev --prefix frontend && npm run build --prefix frontend && npm ci --include=dev --prefix backend && npm run prisma:generate --prefix backend && npm run build --prefix backend",
     "start": "npm run prisma:deploy --prefix backend && npm run start:prod --prefix backend"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
   }
 }

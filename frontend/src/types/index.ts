@@ -346,6 +346,86 @@ export type PartyShift = Omit<
   'restaurantHourlyRateSnapshot' | 'courierHourlyRateSnapshot' | 'calculation' | 'adminNote'
 >;
 
+// ---------------- Stock (Phase 6) ----------------
+
+export type MotorcycleStatus = 'IN_STOCK' | 'ASSIGNED' | 'SOLD';
+export type AccessoryType = 'BAG' | 'CHEST_BAG' | 'OTHER';
+
+export interface Motorcycle {
+  id: string;
+  brand: string;
+  plate: string | null;
+  purchaseDate: string;
+  purchasePrice: string;
+  status: MotorcycleStatus;
+  saleDate: string | null;
+  salePrice: string | null;
+  /** salePrice - purchasePrice, only when SOLD; otherwise null. */
+  saleProfit: number | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MotorcycleSummary {
+  total: number;
+  counts: Record<MotorcycleStatus, number>;
+  totalPurchaseValue: number;
+  totalSaleRevenue: number;
+  totalSaleProfit: number;
+}
+
+export interface AccessoryPurchase {
+  id: string;
+  type: AccessoryType;
+  name: string | null;
+  quantity: number;
+  unitCost: string;
+  totalCost: string;
+  purchaseDate: string;
+  supplier: string | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AccessorySale {
+  id: string;
+  type: AccessoryType;
+  name: string | null;
+  quantity: number;
+  unitPrice: string;
+  unitCost: string;
+  totalRevenue: string;
+  totalCost: string;
+  profit: string;
+  saleDate: string;
+  buyer: string | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AccessorySummary {
+  byType: {
+    type: AccessoryType;
+    purchasedQty: number;
+    soldQty: number;
+    onHandQty: number;
+    soldQtyInRange: number;
+    revenue: number;
+    cost: number;
+    profit: number;
+  }[];
+  totals: {
+    revenue: number;
+    cost: number;
+    profit: number;
+    soldQtyInRange: number;
+    onHandQty: number;
+  };
+}
+
 // ---------------- Reports (Phase 5) ----------------
 
 export interface ReportSummary {

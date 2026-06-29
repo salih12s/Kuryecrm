@@ -27,6 +27,8 @@ import ApprovalsPage from './pages/admin/ApprovalsPage';
 import LiveMapPage from './pages/admin/LiveMapPage';
 import SettingsPage from './pages/admin/SettingsPage';
 import UsersPage from './pages/admin/UsersPage';
+import MotorcyclesPage from './pages/admin/MotorcyclesPage';
+import AccessoriesPage from './pages/admin/AccessoriesPage';
 
 /** Sends the visitor to their role home, or to /login if signed out. */
 function RootRedirect() {
@@ -128,6 +130,22 @@ export default function App() {
         element={
           <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}>
             <FinanceTransactionsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/stock/motorcycles"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}>
+            <MotorcyclesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/stock/accessories"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}>
+            <AccessoriesPage />
           </ProtectedRoute>
         }
       />
