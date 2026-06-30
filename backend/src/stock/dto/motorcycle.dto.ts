@@ -45,6 +45,14 @@ export class CreateMotorcycleDto {
 
   @IsOptional()
   @IsString()
+  buyer?: string;
+
+  @IsOptional()
+  @IsString()
+  buyerCourierId?: string;
+
+  @IsOptional()
+  @IsString()
   note?: string;
 }
 
@@ -82,6 +90,14 @@ export class UpdateMotorcycleDto {
   @IsNumber({}, { message: 'Satış fiyatı sayısal olmalıdır.' })
   @IsPositive({ message: 'Satış fiyatı 0’dan büyük olmalıdır.' })
   salePrice?: number;
+
+  @IsOptional()
+  @IsString()
+  buyer?: string;
+
+  @IsOptional()
+  @IsString()
+  buyerCourierId?: string;
 
   @IsOptional()
   @IsString()

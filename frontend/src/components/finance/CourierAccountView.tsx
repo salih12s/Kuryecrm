@@ -8,10 +8,11 @@ import type { CourierAccountSummary } from '../../types';
 export default function CourierAccountView({ data }: { data: CourierAccountSummary }) {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
         <StatCard label="Toplam Çalışma Saati" value={`${data.totalWorkHours} sa`} />
         <StatCard label="Toplam Hak Ediş" value={formatTL(data.totalEarnings)} />
         <StatCard label="Toplam Aktif Avans" value={formatTL(data.totalActiveAdvances)} />
+        <StatCard label="Ürün Satışları" value={formatTL(data.totalProductCharges)} />
         <StatCard label="Toplam Ödeme" value={formatTL(data.totalActivePayments)} />
         <StatCard label="Kalan Alacak" value={formatTL(data.remainingPayable)} accent />
       </div>
@@ -68,6 +69,27 @@ export default function CourierAccountView({ data }: { data: CourierAccountSumma
                 <td className="px-4 py-2 text-muted">{payment.method ?? '—'}</td>
                 <td className="px-4 py-2 text-muted">{payment.note ?? '—'}</td>
                 <td className="px-4 py-2"><StatusPill status={payment.status} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Section>
+
+      <Section title="Ürün Satışları (Hak Edişten Düşülür)">
+        <table className="w-full text-sm">
+          <thead><tr className="border-b border-slate-200 bg-slate-50 text-left text-muted">
+            <th className="px-4 py-2 font-medium">Tarih</th><th className="px-4 py-2 font-medium">Tür</th><th className="px-4 py-2 font-medium">Ürün</th><th className="px-4 py-2 font-medium">Adet</th><th className="px-4 py-2 font-medium">Tutar</th>
+          </tr></thead>
+          <tbody>
+            {data.productCharges.length === 0 ? (
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-muted">Ürün satışı yok.</td></tr>
+            ) : data.productCharges.map((c) => (
+              <tr key={c.id} className="border-b border-slate-100 last:border-0">
+                <td className="px-4 py-2 text-text">{formatDateTR(c.date)}</td>
+                <td className="px-4 py-2 text-muted">{c.kind === 'MOTORCYCLE' ? 'Motor' : 'Aksesuar'}</td>
+                <td className="px-4 py-2 text-text">{c.description}</td>
+                <td className="px-4 py-2 text-muted">{c.quantity}</td>
+                <td className="px-4 py-2 text-text">{formatTL(c.amount)}</td>
               </tr>
             ))}
           </tbody>

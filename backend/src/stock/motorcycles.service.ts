@@ -7,11 +7,17 @@ import {
   UpdateMotorcycleDto,
 } from './dto/motorcycle.dto';
 
+// Motorcycles are joined to the (optional) buyer courier so we can show the name.
+const motorcycleInclude = {
+  buyerCourier: { select: { id: true, name: true } },
+} satisfies Prisma.MotorcycleInclude;
+type MotorcycleRow = Prisma.MotorcycleGetPayload<{ include: typeof motorcycleInclude }>;
+
 @Injectable()
 export class MotorcyclesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private serialize(m: Prisma.MotorcycleGetPayload<object>) {
+  private serialize(m: MotorcycleRow) {
     const purchasePrice = Number(m.purchasePrice);
     const salePrice = m.salePrice == null ? null : Number(m.salePrice);
     // Sale profit is only meaningful once the bike is sold.
@@ -27,10 +33,21 @@ export class MotorcyclesService {
       saleDate: m.saleDate,
       salePrice: m.salePrice == null ? null : m.salePrice.toString(),
       saleProfit,
+      buyer: m.buyer,
+      buyerCourierId: m.buyerCourierId,
+      buyerCourierName: m.buyerCourier?.name ?? null,
       note: m.note,
       createdAt: m.createdAt,
       updatedAt: m.updatedAt,
     };
+  }
+
+  // The buyer courier (if any) must exist before we link the sale to it.
+  private async resolveBuyerCourier(buyerCourierId?: string | null): Promise<string | null> {
+    if (!buyerCourierId) return null;
+    const courier = await this.prisma.courier.findUnique({ where: { id: buyerCourierId } });
+    if (!courier) throw new NotFoundException('Alıcı kurye bulunamadı.');
+    return courier.id;
   }
 
   private buildWhere(q: MotorcycleQueryDto): Prisma.MotorcycleWhereInput {
@@ -48,6 +65,7 @@ export class MotorcyclesService {
   async findAll(q: MotorcycleQueryDto) {
     const rows = await this.prisma.motorcycle.findMany({
       where: this.buildWhere(q),
+      include: motorcycleInclude,
       orderBy: [{ purchaseDate: 'desc' }, { createdAt: 'desc' }],
     });
     return rows.map((r) => this.serialize(r));
@@ -83,12 +101,13 @@ export class MotorcyclesService {
   }
 
   async findOne(id: string) {
-    const row = await this.prisma.motorcycle.findUnique({ where: { id } });
+    const row = await this.prisma.motorcycle.findUnique({ where: { id }, include: motorcycleInclude });
     if (!row) throw new NotFoundException('Motor kaydı bulunamadı.');
     return this.serialize(row);
   }
 
   async create(dto: CreateMotorcycleDto) {
+    const buyerCourierId = await this.resolveBuyerCourier(dto.buyerCourierId);
     const row = await this.prisma.motorcycle.create({
       data: {
         brand: dto.brand,
@@ -98,8 +117,11 @@ export class MotorcyclesService {
         status: dto.status ?? MotorcycleStatus.IN_STOCK,
         saleDate: dto.saleDate || null,
         salePrice: dto.salePrice != null ? new Prisma.Decimal(dto.salePrice) : null,
+        buyer: dto.buyer || null,
+        buyerCourierId,
         note: dto.note || null,
       },
+      include: motorcycleInclude,
     });
     return this.serialize(row);
   }
@@ -116,9 +138,15 @@ export class MotorcyclesService {
     if (dto.saleDate !== undefined) data.saleDate = dto.saleDate || null;
     if (dto.salePrice !== undefined)
       data.salePrice = dto.salePrice != null ? new Prisma.Decimal(dto.salePrice) : null;
+    if (dto.buyer !== undefined) data.buyer = dto.buyer || null;
+    if (dto.buyerCourierId !== undefined) {
+      data.buyerCourier = dto.buyerCourierId
+        ? { connect: { id: await this.resolveBuyerCourier(dto.buyerCourierId) as string } }
+        : { disconnect: true };
+    }
     if (dto.note !== undefined) data.note = dto.note || null;
 
-    const row = await this.prisma.motorcycle.update({ where: { id }, data });
+    const row = await this.prisma.motorcycle.update({ where: { id }, data, include: motorcycleInclude });
     return this.serialize(row);
   }
 

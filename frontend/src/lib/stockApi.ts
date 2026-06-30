@@ -1,5 +1,6 @@
 import { api } from './api';
 import type {
+  AccessoryProduct,
   AccessoryPurchase,
   AccessorySale,
   AccessorySummary,
@@ -33,6 +34,10 @@ export const motorcyclesApi = {
 export const accessoriesApi = {
   summary: async (params: object = {}) =>
     (await api.get<AccessorySummary>('/admin/accessories/summary', { params: clean(params) })).data,
+
+  // Distinct named products with current stock (for sale-form autocomplete).
+  products: async () =>
+    (await api.get<AccessoryProduct[]>('/admin/accessories/products')).data,
 
   // Purchases
   listPurchases: async (params: object = {}) =>

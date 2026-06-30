@@ -6,8 +6,9 @@ import MoneyField from '../../components/admin/MoneyField';
 import StatCard from '../../components/StatCard';
 import { MotorcycleStatusBadge, MOTOR_STATUS_OPTIONS } from '../../components/admin/StockBadges';
 import { motorcyclesApi } from '../../lib/stockApi';
+import { couriersApi } from '../../lib/adminApi';
 import { formatTL, formatDateTR } from '../../lib/format';
-import type { Motorcycle, MotorcycleStatus, MotorcycleSummary } from '../../types';
+import type { AdminCourier, Motorcycle, MotorcycleStatus, MotorcycleSummary } from '../../types';
 import { extractError } from './AdvancesPage';
 import { useAuth } from '../../context/AuthContext';
 import { canEditFinance } from '../../lib/permissions';
@@ -29,6 +30,7 @@ export default function MotorcyclesPage() {
   const canEdit = canEditFinance(user);
   const [rows, setRows] = useState<Motorcycle[]>([]);
   const [summary, setSummary] = useState<MotorcycleSummary | null>(null);
+  const [couriers, setCouriers] = useState<AdminCourier[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ status: '', search: '' });
 
@@ -40,7 +42,7 @@ export default function MotorcyclesPage() {
 
   // Dedicated "sell this motorcycle" dialog.
   const [sellTarget, setSellTarget] = useState<Motorcycle | null>(null);
-  const [sellForm, setSellForm] = useState({ saleDate: today(), salePrice: '' });
+  const [sellForm, setSellForm] = useState({ saleDate: today(), salePrice: '', buyer: '', buyerCourierId: '' });
   const [sellError, setSellError] = useState<string | null>(null);
   const [selling, setSelling] = useState(false);
 
@@ -60,6 +62,9 @@ export default function MotorcyclesPage() {
     }
   };
 
+  useEffect(() => {
+    couriersApi.list({ status: 'active' }).then(setCouriers).catch(() => setCouriers([]));
+  }, []);
   useEffect(() => {
     const t = setTimeout(load, 200);
     return () => clearTimeout(t);
@@ -130,8 +135,14 @@ export default function MotorcyclesPage() {
 
   const openSell = (m: Motorcycle) => {
     setSellTarget(m);
-    setSellForm({ saleDate: today(), salePrice: '' });
+    setSellForm({ saleDate: today(), salePrice: '', buyer: m.buyer ?? '', buyerCourierId: m.buyerCourierId ?? '' });
     setSellError(null);
+  };
+  // Buyer is free text; if it exactly matches a courier name we auto-link that
+  // courier so the sale price is charged against their earnings.
+  const onSellBuyerChange = (value: string) => {
+    const match = couriers.find((c) => c.name.trim() === value.trim());
+    setSellForm((f) => ({ ...f, buyer: value, buyerCourierId: match?.id ?? '' }));
   };
   const submitSell = async (e: FormEvent) => {
     e.preventDefault();
@@ -147,6 +158,9 @@ export default function MotorcyclesPage() {
         status: 'SOLD',
         saleDate: sellForm.saleDate,
         salePrice: Number(sellForm.salePrice),
+        buyer: sellForm.buyer,
+        // Send empty string to clear any prior link when no courier matches.
+        buyerCourierId: sellForm.buyerCourierId,
       });
       setSellTarget(null);
       await load();
@@ -159,6 +173,7 @@ export default function MotorcyclesPage() {
 
   const isSold = form.status === 'SOLD';
   const sellProfit = sellTarget ? Number(sellForm.salePrice || 0) - Number(sellTarget.purchasePrice) : 0;
+  const sellBuyerCourier = couriers.find((c) => c.id === sellForm.buyerCourierId);
 
   return (
     <AdminLayout>
@@ -212,7 +227,10 @@ export default function MotorcyclesPage() {
               {m.status === 'SOLD' && m.salePrice && (
                 <>
                   <div><span className="text-muted">Satış:</span> <span className="font-medium text-text">{formatTL(m.salePrice)}</span></div>
-                  <div className="col-span-2"><span className="text-muted">Kâr:</span> <span className={`font-semibold ${(m.saleProfit ?? 0) >= 0 ? 'text-success' : 'text-danger'}`}>{formatTL(m.saleProfit ?? 0)}</span></div>
+                  <div><span className="text-muted">Kâr:</span> <span className={`font-semibold ${(m.saleProfit ?? 0) >= 0 ? 'text-success' : 'text-danger'}`}>{formatTL(m.saleProfit ?? 0)}</span></div>
+                  {(m.buyerCourierName || m.buyer) && (
+                    <div className="col-span-2"><span className="text-muted">Alıcı:</span> <span className="font-medium text-text">{m.buyerCourierName || m.buyer}{m.buyerCourierName ? ' (kurye)' : ''}</span></div>
+                  )}
                 </>
               )}
             </div>
@@ -256,7 +274,14 @@ export default function MotorcyclesPage() {
                   <td className="px-4 py-3 text-muted">{m.plate || '—'}</td>
                   <td className="px-4 py-3 text-text">{formatDateTR(m.purchaseDate)}</td>
                   <td className="px-4 py-3 text-text">{formatTL(m.purchasePrice)}</td>
-                  <td className="px-4 py-3 text-text">{m.status === 'SOLD' && m.salePrice ? formatTL(m.salePrice) : '—'}</td>
+                  <td className="px-4 py-3 text-text">
+                    {m.status === 'SOLD' && m.salePrice ? (
+                      <div>
+                        <div>{formatTL(m.salePrice)}</div>
+                        {(m.buyerCourierName || m.buyer) && <div className="text-xs text-muted">{m.buyerCourierName || m.buyer}{m.buyerCourierName ? ' (kurye)' : ''}</div>}
+                      </div>
+                    ) : '—'}
+                  </td>
                   <td className="px-4 py-3">{m.saleProfit != null ? <span className={`font-semibold ${m.saleProfit >= 0 ? 'text-success' : 'text-danger'}`}>{formatTL(m.saleProfit)}</span> : '—'}</td>
                   <td className="px-4 py-3"><MotorcycleStatusBadge status={m.status} /></td>
                   <td className="px-4 py-3">
@@ -320,11 +345,35 @@ export default function MotorcyclesPage() {
               <Field label="Satış Tarihi" type="date" required value={sellForm.saleDate} onChange={(e) => setSellForm({ ...sellForm, saleDate: e.target.value })} />
               <MoneyField label="Satış Fiyatı" required value={sellForm.salePrice} onChange={(v) => setSellForm({ ...sellForm, salePrice: v })} />
             </div>
+            {/* Buyer: free text, but matching a courier name auto-links them so the
+                sale price is charged against the courier's earnings. */}
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-text">Alıcı (opsiyonel)</span>
+              <input
+                list="motorcycle-buyers"
+                value={sellForm.buyer}
+                onChange={(e) => onSellBuyerChange(e.target.value)}
+                placeholder="Kurye seçin ya da serbest isim yazın"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+              <datalist id="motorcycle-buyers">
+                {couriers.map((c) => <option key={c.id} value={c.name}>Kurye</option>)}
+              </datalist>
+            </label>
             {sellForm.salePrice !== '' && (
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
                 <span className="text-muted">Satış kârı: </span>
                 <span className={`font-semibold ${sellProfit >= 0 ? 'text-success' : 'text-danger'}`}>{formatTL(sellProfit)}</span>
               </div>
+            )}
+            {sellBuyerCourier ? (
+              sellForm.salePrice !== '' && (
+                <div className="rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-text">
+                  <strong>{sellBuyerCourier.name}</strong> kuryesinin hak edişinden <strong>{formatTL(sellForm.salePrice)}</strong> düşülecek.
+                </div>
+              )
+            ) : sellForm.buyer.trim() !== '' && (
+              <p className="text-xs text-muted">Bu isim kayıtlı bir kuryeyle eşleşmiyor; sadece alıcı adı olarak kaydedilecek (hak edişe dokunulmaz).</p>
             )}
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setSellTarget(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-text hover:bg-slate-100">İptal</button>

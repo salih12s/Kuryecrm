@@ -15,9 +15,21 @@ const ACCESSORY_TYPES: AccessoryType[] = [
   AccessoryType.OTHER,
 ];
 
+// Sales are joined to the (optional) buyer courier so we can show the name.
+const saleInclude = {
+  buyerCourier: { select: { id: true, name: true } },
+} satisfies Prisma.AccessorySaleInclude;
+type SaleRow = Prisma.AccessorySaleGetPayload<{ include: typeof saleInclude }>;
+
 @Injectable()
 export class AccessoriesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // Stock is tracked per product *name* within a type. A blank name is its own
+  // "unnamed" bucket. Normalize so " Çanta " and "Çanta" count as one product.
+  private normalizeName(name?: string | null): string {
+    return (name ?? '').trim();
+  }
 
   // ---------------- Purchases ----------------
   private serializePurchase(p: Prisma.AccessoryPurchaseGetPayload<object>) {
@@ -92,7 +104,7 @@ export class AccessoriesService {
   }
 
   // ---------------- Sales ----------------
-  private serializeSale(s: Prisma.AccessorySaleGetPayload<object>) {
+  private serializeSale(s: SaleRow) {
     const revenue = Number(s.unitPrice) * s.quantity;
     const cost = Number(s.unitCost) * s.quantity;
     return {
@@ -107,6 +119,8 @@ export class AccessoriesService {
       profit: (revenue - cost).toFixed(2),
       saleDate: s.saleDate,
       buyer: s.buyer,
+      buyerCourierId: s.buyerCourierId,
+      buyerCourierName: s.buyerCourier?.name ?? null,
       note: s.note,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
@@ -116,39 +130,60 @@ export class AccessoriesService {
   async listSales(q: AccessoryQueryDto) {
     const rows = await this.prisma.accessorySale.findMany({
       where: this.dateWhere(q, 'saleDate'),
+      include: saleInclude,
       orderBy: [{ saleDate: 'desc' }, { createdAt: 'desc' }],
     });
     return rows.map((r) => this.serializeSale(r));
   }
 
-  // Current stock on hand for a type = purchased - sold. `excludeSaleId` lets an
-  // edit ignore the sale row being changed so its own quantity isn't counted.
-  private async onHand(type: AccessoryType, excludeSaleId?: string) {
-    const [purchased, sold] = await Promise.all([
-      this.prisma.accessoryPurchase.aggregate({
-        where: { type },
-        _sum: { quantity: true },
-      }),
-      this.prisma.accessorySale.aggregate({
+  // Current stock on hand for one product (type + name) = purchased - sold for
+  // that exact product. `excludeSaleId` lets an edit ignore the row being
+  // changed so its own quantity isn't double-counted.
+  private async onHand(type: AccessoryType, name: string | null | undefined, excludeSaleId?: string) {
+    const key = this.normalizeName(name);
+    const [purchases, sales] = await Promise.all([
+      this.prisma.accessoryPurchase.findMany({ where: { type }, select: { name: true, quantity: true } }),
+      this.prisma.accessorySale.findMany({
         where: { type, ...(excludeSaleId ? { id: { not: excludeSaleId } } : {}) },
-        _sum: { quantity: true },
+        select: { name: true, quantity: true },
       }),
     ]);
-    return (purchased._sum.quantity ?? 0) - (sold._sum.quantity ?? 0);
+    const purchased = purchases
+      .filter((p) => this.normalizeName(p.name) === key)
+      .reduce((sum, p) => sum + p.quantity, 0);
+    const sold = sales
+      .filter((s) => this.normalizeName(s.name) === key)
+      .reduce((sum, s) => sum + s.quantity, 0);
+    return purchased - sold;
   }
 
-  private async assertStock(type: AccessoryType, quantity: number, excludeSaleId?: string) {
-    const available = await this.onHand(type, excludeSaleId);
+  private async assertStock(
+    type: AccessoryType,
+    name: string | null | undefined,
+    quantity: number,
+    excludeSaleId?: string,
+  ) {
+    const available = await this.onHand(type, name, excludeSaleId);
     if (quantity > available) {
+      const label = this.normalizeName(name) || 'bu ürün';
       throw new BadRequestException(
-        `Yetersiz stok. Bu türde stokta ${available} adet var, ${quantity} adet satılamaz.`,
+        `Yetersiz stok. "${label}" için stokta ${available} adet var, ${quantity} adet satılamaz.`,
       );
     }
   }
 
+  // The buyer courier (if any) must exist before we link the sale to it.
+  private async resolveBuyerCourier(buyerCourierId?: string | null): Promise<string | null> {
+    if (!buyerCourierId) return null;
+    const courier = await this.prisma.courier.findUnique({ where: { id: buyerCourierId } });
+    if (!courier) throw new NotFoundException('Alıcı kurye bulunamadı.');
+    return courier.id;
+  }
+
   async createSale(dto: CreateAccessorySaleDto) {
-    // Sale must pull from existing stock; reject if it would go negative.
-    await this.assertStock(dto.type, dto.quantity);
+    // Sale must pull from existing stock of that product; reject if negative.
+    await this.assertStock(dto.type, dto.name, dto.quantity);
+    const buyerCourierId = await this.resolveBuyerCourier(dto.buyerCourierId);
     const row = await this.prisma.accessorySale.create({
       data: {
         type: dto.type,
@@ -158,8 +193,10 @@ export class AccessoriesService {
         unitCost: new Prisma.Decimal(dto.unitCost),
         saleDate: dto.saleDate,
         buyer: dto.buyer || null,
+        buyerCourierId,
         note: dto.note || null,
       },
+      include: saleInclude,
     });
     return this.serializeSale(row);
   }
@@ -167,10 +204,12 @@ export class AccessoriesService {
   async updateSale(id: string, dto: UpdateAccessorySaleDto) {
     const existing = await this.prisma.accessorySale.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Satış kaydı bulunamadı.');
-    // Re-validate stock against the new type/quantity, ignoring this row itself.
+    // Re-validate stock against the new product (type+name)/quantity, ignoring
+    // this row itself.
     const nextType = dto.type ?? existing.type;
+    const nextName = dto.name !== undefined ? dto.name : existing.name;
     const nextQty = dto.quantity ?? existing.quantity;
-    await this.assertStock(nextType, nextQty, id);
+    await this.assertStock(nextType, nextName, nextQty, id);
     const data: Prisma.AccessorySaleUpdateInput = {};
     if (dto.type) data.type = dto.type;
     if (dto.name !== undefined) data.name = dto.name || null;
@@ -179,9 +218,46 @@ export class AccessoriesService {
     if (dto.unitCost !== undefined) data.unitCost = new Prisma.Decimal(dto.unitCost);
     if (dto.saleDate) data.saleDate = dto.saleDate;
     if (dto.buyer !== undefined) data.buyer = dto.buyer || null;
+    if (dto.buyerCourierId !== undefined) {
+      data.buyerCourier = dto.buyerCourierId
+        ? { connect: { id: await this.resolveBuyerCourier(dto.buyerCourierId) as string } }
+        : { disconnect: true };
+    }
     if (dto.note !== undefined) data.note = dto.note || null;
-    const row = await this.prisma.accessorySale.update({ where: { id }, data });
+    const row = await this.prisma.accessorySale.update({ where: { id }, data, include: saleInclude });
     return this.serializeSale(row);
+  }
+
+  // Distinct named products (type + name) with current stock on hand, for the
+  // sale form's autocomplete. Sorted by name; `lastUnitCost` is the most recent
+  // purchase cost so the form can prefill the cost basis.
+  async products() {
+    const [purchases, sales] = await Promise.all([
+      this.prisma.accessoryPurchase.findMany({
+        orderBy: [{ purchaseDate: 'asc' }, { createdAt: 'asc' }],
+        select: { type: true, name: true, quantity: true, unitCost: true },
+      }),
+      this.prisma.accessorySale.findMany({ select: { type: true, name: true, quantity: true } }),
+    ]);
+    type Entry = { type: AccessoryType; name: string; purchased: number; sold: number; lastUnitCost: string };
+    const map = new Map<string, Entry>();
+    for (const p of purchases) {
+      const name = this.normalizeName(p.name);
+      if (!name) continue; // only named products are suggestable
+      const k = `${p.type}::${name}`;
+      const e = map.get(k) ?? { type: p.type, name, purchased: 0, sold: 0, lastUnitCost: p.unitCost.toString() };
+      e.purchased += p.quantity;
+      e.lastUnitCost = p.unitCost.toString(); // asc order => last assignment is newest
+      map.set(k, e);
+    }
+    for (const s of sales) {
+      const name = this.normalizeName(s.name);
+      const e = map.get(`${s.type}::${name}`);
+      if (e) e.sold += s.quantity;
+    }
+    return [...map.values()]
+      .map((e) => ({ type: e.type, name: e.name, onHandQty: e.purchased - e.sold, lastUnitCost: e.lastUnitCost }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'tr'));
   }
 
   async removeSale(id: string) {

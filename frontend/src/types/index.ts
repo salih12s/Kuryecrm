@@ -215,7 +215,16 @@ export interface CourierAccountSummary {
   totalEarnings: number;
   totalActiveAdvances: number;
   totalActivePayments: number;
+  totalProductCharges: number;
   remainingPayable: number;
+  productCharges: {
+    id: string;
+    kind: 'ACCESSORY' | 'MOTORCYCLE';
+    date: string;
+    description: string;
+    quantity: number;
+    amount: string;
+  }[];
   shifts: {
     id: string;
     date: string;
@@ -362,6 +371,10 @@ export interface Motorcycle {
   salePrice: string | null;
   /** salePrice - purchasePrice, only when SOLD; otherwise null. */
   saleProfit: number | null;
+  /** Free-text buyer name and/or linked courier (sale price charged to them). */
+  buyer: string | null;
+  buyerCourierId: string | null;
+  buyerCourierName: string | null;
   note: string | null;
   createdAt: string;
   updatedAt: string;
@@ -401,9 +414,19 @@ export interface AccessorySale {
   profit: string;
   saleDate: string;
   buyer: string | null;
+  buyerCourierId: string | null;
+  buyerCourierName: string | null;
   note: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Distinct named accessory product with current stock, for sale autocomplete. */
+export interface AccessoryProduct {
+  type: AccessoryType;
+  name: string;
+  onHandQty: number;
+  lastUnitCost: string;
 }
 
 export interface AccessorySummary {
@@ -483,7 +506,7 @@ export interface RestaurantReportRow {
 
 export interface CourierReportRow {
   courierId: string; courierName: string; isActive: boolean; shiftCount: number;
-  workHours: number; earnings: number; advances: number; payments: number; remainingPayable: number;
+  workHours: number; earnings: number; advances: number; payments: number; productCharges: number; remainingPayable: number;
   lastAdvanceDate: string | null; lastPaymentDate: string | null;
 }
 

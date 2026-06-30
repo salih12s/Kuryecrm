@@ -108,14 +108,48 @@ export class AccountingService {
       .filter((payment) => payment.status === CourierPaymentStatus.ACTIVE)
       .reduce((sum, payment) => sum + Number(payment.amount), 0);
 
+    // Stock sold to this courier (accessories + motorcycles) is charged against
+    // their earnings, just like an advance.
+    const [accessorySales, motorcycleSales] = await Promise.all([
+      this.prisma.accessorySale.findMany({
+        where: { buyerCourierId: courierId },
+        orderBy: [{ saleDate: 'desc' }, { createdAt: 'desc' }],
+      }),
+      this.prisma.motorcycle.findMany({
+        where: { buyerCourierId: courierId, status: 'SOLD', salePrice: { not: null } },
+        orderBy: [{ saleDate: 'desc' }, { createdAt: 'desc' }],
+      }),
+    ]);
+    const productCharges = [
+      ...accessorySales.map((s) => ({
+        id: s.id,
+        kind: 'ACCESSORY' as const,
+        date: s.saleDate,
+        description: s.name || 'Aksesuar',
+        quantity: s.quantity,
+        amount: (Number(s.unitPrice) * s.quantity).toFixed(2),
+      })),
+      ...motorcycleSales.map((m) => ({
+        id: m.id,
+        kind: 'MOTORCYCLE' as const,
+        date: m.saleDate ?? '',
+        description: m.brand,
+        quantity: 1,
+        amount: Number(m.salePrice).toFixed(2),
+      })),
+    ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    const totalProductCharges = productCharges.reduce((sum, c) => sum + Number(c.amount), 0);
+
     return {
       courier: { id: courier.id, name: courier.name, phone: courier.phone, isActive: courier.isActive },
       totalWorkHours: round2(totalWorkHours),
       totalEarnings: round2(totalEarnings),
       totalActiveAdvances: round2(totalActiveAdvances),
       totalActivePayments: round2(totalActivePayments),
-      remainingPayable: round2(totalEarnings - totalActiveAdvances - totalActivePayments),
+      totalProductCharges: round2(totalProductCharges),
+      remainingPayable: round2(totalEarnings - totalActiveAdvances - totalActivePayments - totalProductCharges),
       shifts: shiftItems,
+      productCharges,
       advances: advances.map((a) => ({
         id: a.id,
         amount: a.amount.toString(),

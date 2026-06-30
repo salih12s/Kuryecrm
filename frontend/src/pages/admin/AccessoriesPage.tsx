@@ -10,12 +10,15 @@ import {
   ACCESSORY_TYPE_OPTIONS,
 } from '../../components/admin/StockBadges';
 import { accessoriesApi } from '../../lib/stockApi';
+import { couriersApi } from '../../lib/adminApi';
 import { formatTL, formatDateTR } from '../../lib/format';
 import type {
+  AccessoryProduct,
   AccessoryPurchase,
   AccessorySale,
   AccessorySummary,
   AccessoryType,
+  AdminCourier,
 } from '../../types';
 import { extractError } from './AdvancesPage';
 import { useAuth } from '../../context/AuthContext';
@@ -39,8 +42,7 @@ const emptySale = {
   unitPrice: '',
   unitCost: '',
   saleDate: today(),
-  buyer: '',
-  note: '',
+  buyerCourierId: '',
 };
 
 export default function AccessoriesPage() {
@@ -50,20 +52,24 @@ export default function AccessoriesPage() {
   const [summary, setSummary] = useState<AccessorySummary | null>(null);
   const [purchases, setPurchases] = useState<AccessoryPurchase[]>([]);
   const [sales, setSales] = useState<AccessorySale[]>([]);
+  const [products, setProducts] = useState<AccessoryProduct[]>([]);
+  const [couriers, setCouriers] = useState<AdminCourier[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ type: '', dateFrom: '', dateTo: '' });
 
   const load = async () => {
     setLoading(true);
     try {
-      const [sum, p, s] = await Promise.all([
+      const [sum, p, s, prod] = await Promise.all([
         accessoriesApi.summary(filters),
         accessoriesApi.listPurchases(filters),
         accessoriesApi.listSales(filters),
+        accessoriesApi.products(),
       ]);
       setSummary(sum);
       setPurchases(p);
       setSales(s);
+      setProducts(prod);
     } catch {
       setSummary(null);
     } finally {
@@ -71,6 +77,9 @@ export default function AccessoriesPage() {
     }
   };
 
+  useEffect(() => {
+    couriersApi.list({ status: 'active' }).then(setCouriers).catch(() => setCouriers([]));
+  }, []);
   useEffect(() => {
     const t = setTimeout(load, 200);
     return () => clearTimeout(t);
@@ -132,7 +141,7 @@ export default function AccessoriesPage() {
       {tab === 'purchases' ? (
         <PurchasesPanel rows={purchases} loading={loading} canEdit={canEdit} reload={load} />
       ) : (
-        <SalesPanel rows={sales} loading={loading} canEdit={canEdit} reload={load} summary={summary} />
+        <SalesPanel rows={sales} loading={loading} canEdit={canEdit} reload={load} summary={summary} products={products} couriers={couriers} />
       )}
     </AdminLayout>
   );
@@ -242,7 +251,7 @@ function PurchasesPanel({ rows, loading, canEdit, reload }: { rows: AccessoryPur
 }
 
 // ---------------- Sales panel ----------------
-function SalesPanel({ rows, loading, canEdit, reload, summary }: { rows: AccessorySale[]; loading: boolean; canEdit: boolean; reload: () => Promise<void>; summary: AccessorySummary | null }) {
+function SalesPanel({ rows, loading, canEdit, reload, summary, products, couriers }: { rows: AccessorySale[]; loading: boolean; canEdit: boolean; reload: () => Promise<void>; summary: AccessorySummary | null; products: AccessoryProduct[]; couriers: AdminCourier[] }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AccessorySale | null>(null);
   const [form, setForm] = useState(emptySale);
@@ -252,25 +261,48 @@ function SalesPanel({ rows, loading, canEdit, reload, summary }: { rows: Accesso
   const openCreate = () => { setEditing(null); setForm(emptySale); setError(null); setOpen(true); };
   const openEdit = (s: AccessorySale) => {
     setEditing(s);
-    setForm({ type: s.type, name: s.name ?? '', quantity: String(s.quantity), unitPrice: s.unitPrice, unitCost: s.unitCost, saleDate: s.saleDate, buyer: s.buyer ?? '', note: s.note ?? '' });
+    setForm({ type: s.type, name: s.name ?? '', quantity: String(s.quantity), unitPrice: s.unitPrice, unitCost: s.unitCost, saleDate: s.saleDate, buyerCourierId: s.buyerCourierId ?? '' });
     setError(null); setOpen(true);
   };
 
-  // Stock on hand for the selected type. When editing, the row's own quantity is
-  // already counted in `soldQty`, so add it back to get the true sellable amount.
+  // When the typed/selected product name matches a known product, drive stock
+  // and prefill type + cost basis from it. Otherwise fall back to type-level
+  // stock (e.g. legacy unnamed products).
+  const trimmedName = form.name.trim();
+  const matchedProduct = products.find((p) => p.type === form.type && p.name === trimmedName)
+    ?? products.find((p) => p.name === trimmedName);
+
+  // Pick a product from the autocomplete: set name + its type and prefill cost.
+  const onNameChange = (value: string) => {
+    const match = products.find((p) => p.name === value.trim());
+    setForm((f) => ({
+      ...f,
+      name: value,
+      type: match ? match.type : f.type,
+      unitCost: match && (f.unitCost === '' || !editing) ? match.lastUnitCost : f.unitCost,
+    }));
+  };
+
+  // Sellable stock: per-product when the name is a known product, else per-type.
+  // When editing the same product, add this row's own quantity back.
   const typeRow = summary?.byType.find((t) => t.type === form.type);
-  const available = (typeRow?.onHandQty ?? 0) + (editing && editing.type === form.type ? editing.quantity : 0);
+  const baseAvailable = matchedProduct ? matchedProduct.onHandQty : (typeRow?.onHandQty ?? 0);
+  const editingSameProduct = editing
+    && editing.type === form.type
+    && (editing.name ?? '').trim() === trimmedName;
+  const available = baseAvailable + (editingSameProduct ? editing!.quantity : 0);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     if (Number(form.quantity) > available) {
-      setError(`Yetersiz stok. Bu türde satılabilir ${available} adet var.`);
+      setError(`Yetersiz stok. Bu üründen satılabilir ${available} adet var.`);
       return;
     }
     setSaving(true);
     try {
-      const payload = { type: form.type, name: form.name, quantity: Number(form.quantity), unitPrice: Number(form.unitPrice), unitCost: Number(form.unitCost), saleDate: form.saleDate, buyer: form.buyer, note: form.note };
+      const buyerName = couriers.find((c) => c.id === form.buyerCourierId)?.name ?? '';
+      const payload = { type: form.type, name: form.name, quantity: Number(form.quantity), unitPrice: Number(form.unitPrice), unitCost: Number(form.unitCost), saleDate: form.saleDate, buyer: buyerName, buyerCourierId: form.buyerCourierId };
       if (editing) await accessoriesApi.updateSale(editing.id, payload);
       else await accessoriesApi.createSale(payload);
       setOpen(false); await reload();
@@ -285,6 +317,7 @@ function SalesPanel({ rows, loading, canEdit, reload, summary }: { rows: Accesso
   const previewProfit = (Number(form.unitPrice) - Number(form.unitCost)) * Number(form.quantity);
   const previewValid = form.unitPrice !== '' && form.unitCost !== '' && form.quantity !== '';
   const overStock = form.quantity !== '' && Number(form.quantity) > available;
+  const buyerCourier = couriers.find((c) => c.id === form.buyerCourierId);
 
   return (
     <>
@@ -304,6 +337,7 @@ function SalesPanel({ rows, loading, canEdit, reload, summary }: { rows: Accesso
                 <th className="px-4 py-3 font-medium">Adet</th>
                 <th className="px-4 py-3 font-medium">Birim Satış</th>
                 <th className="px-4 py-3 font-medium">Birim Alış</th>
+                <th className="px-4 py-3 font-medium">Alıcı</th>
                 <th className="px-4 py-3 font-medium">Gelir</th>
                 <th className="px-4 py-3 font-medium">Kâr</th>
                 <th className="px-4 py-3 text-right font-medium">İşlemler</th>
@@ -311,9 +345,9 @@ function SalesPanel({ rows, loading, canEdit, reload, summary }: { rows: Accesso
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-muted">Yükleniyor...</td></tr>
+                <tr><td colSpan={10} className="px-4 py-8 text-center text-muted">Yükleniyor...</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-muted">Kayıt bulunamadı.</td></tr>
+                <tr><td colSpan={10} className="px-4 py-8 text-center text-muted">Kayıt bulunamadı.</td></tr>
               ) : rows.map((s) => {
                 const profit = Number(s.profit);
                 return (
@@ -324,6 +358,7 @@ function SalesPanel({ rows, loading, canEdit, reload, summary }: { rows: Accesso
                     <td className="px-4 py-3 text-text">{s.quantity}</td>
                     <td className="px-4 py-3 text-text">{formatTL(s.unitPrice)}</td>
                     <td className="px-4 py-3 text-muted">{formatTL(s.unitCost)}</td>
+                    <td className="px-4 py-3 text-text">{s.buyerCourierName ? <span className="inline-flex items-center gap-1">{s.buyerCourierName}<span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">kurye</span></span> : (s.buyer || '—')}</td>
                     <td className="px-4 py-3 text-text">{formatTL(s.totalRevenue)}</td>
                     <td className="px-4 py-3"><span className={`font-semibold ${profit >= 0 ? 'text-success' : 'text-danger'}`}>{formatTL(s.profit)}</span></td>
                     <td className="px-4 py-3">
@@ -345,14 +380,34 @@ function SalesPanel({ rows, loading, canEdit, reload, summary }: { rows: Accesso
       <Modal open={open} title={editing ? 'Satış Düzenle' : 'Yeni Aksesuar Satışı'} onClose={() => setOpen(false)}>
         <form onSubmit={submit} className="space-y-4">
           {error && <div className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">{error}</div>}
+          {/* Product name with autocomplete from purchased products. Selecting a
+              product sets its type and prefills the cost basis. */}
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-text">Ürün Adı</span>
+            <input
+              list="accessory-products"
+              value={form.name}
+              onChange={(e) => onNameChange(e.target.value)}
+              placeholder="Yazınca alıştaki ürünler önerilir, örn. Göğüs Çantası"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+            <datalist id="accessory-products">
+              {products.map((p) => (
+                <option key={`${p.type}-${p.name}`} value={p.name}>{`${ACCESSORY_TYPE_LABEL[p.type]} · stok ${p.onHandQty}`}</option>
+              ))}
+            </datalist>
+          </label>
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-text">Tür</span>
             <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as AccessoryType })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
               {ACCESSORY_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            <span className="mt-1 block text-xs text-muted">Bu türde stokta <strong>{available}</strong> adet var. Satış stoktan düşülür.</span>
+            <span className="mt-1 block text-xs text-muted">
+              {trimmedName
+                ? <>«{trimmedName}» ürününden stokta <strong>{available}</strong> adet var. Satış stoktan düşülür.</>
+                : <>Bu türde stokta <strong>{available}</strong> adet var.</>}
+            </span>
           </label>
-          <Field label="Ürün Adı (opsiyonel)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <div className="grid grid-cols-3 gap-3">
             <Field label="Adet" type="number" min="1" step="1" required value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
             <MoneyField label="Birim Satış" required value={form.unitPrice} onChange={(v) => setForm({ ...form, unitPrice: v })} />
@@ -368,8 +423,20 @@ function SalesPanel({ rows, loading, canEdit, reload, summary }: { rows: Accesso
             </div>
           )}
           <Field label="Satış Tarihi" type="date" required value={form.saleDate} onChange={(e) => setForm({ ...form, saleDate: e.target.value })} />
-          <Field label="Alıcı (opsiyonel)" value={form.buyer} onChange={(e) => setForm({ ...form, buyer: e.target.value })} />
-          <Field label="Not" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+          {/* Buyer is a registered courier; the sale revenue is charged against
+              that courier's earnings (hak ediş). */}
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-text">Alıcı Kurye (opsiyonel)</span>
+            <select value={form.buyerCourierId} onChange={(e) => setForm({ ...form, buyerCourierId: e.target.value })} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              <option value="">Seçiniz (kurye)</option>
+              {couriers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          {buyerCourier && previewValid && !overStock && (
+            <div className="rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-text">
+              <strong>{buyerCourier.name}</strong> kuryesinin hak edişinden <strong>{formatTL((Number(form.unitPrice) * Number(form.quantity)).toFixed(2))}</strong> düşülecek.
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-text hover:bg-slate-100">İptal</button>
             <button type="submit" disabled={saving || overStock} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-60">{saving ? 'Kaydediliyor...' : 'Kaydet'}</button>

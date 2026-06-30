@@ -317,6 +317,11 @@ export class ReportsService {
           },
           orderBy: { paymentDate: 'desc' },
         },
+        // Stock sold to the courier within the period is charged against earnings.
+        accessorySales: { where: { saleDate: { gte: startDate, lte: endDate } } },
+        motorcycleSales: {
+          where: { status: 'SOLD', salePrice: { not: null }, saleDate: { gte: startDate, lte: endDate } },
+        },
       },
     });
     return couriers.map((courier) => {
@@ -324,11 +329,15 @@ export class ReportsService {
       const earnings = courier.shifts.reduce((sum, shift) => sum + durationHours(shift.approvedStartTime!, shift.approvedEndTime!) * Number(shift.courierHourlyRateSnapshot), 0);
       const advances = courier.advances.reduce((sum, item) => sum + Number(item.amount), 0);
       const payments = courier.payments.reduce((sum, item) => sum + Number(item.amount), 0);
+      const productCharges =
+        courier.accessorySales.reduce((sum, s) => sum + Number(s.unitPrice) * s.quantity, 0) +
+        courier.motorcycleSales.reduce((sum, m) => sum + Number(m.salePrice), 0);
       return {
         courierId: courier.id, courierName: courier.name, isActive: courier.isActive,
         shiftCount: courier.shifts.length, workHours: round2(workHours), earnings: round2(earnings),
         advances: round2(advances), payments: round2(payments),
-        remainingPayable: round2(earnings - advances - payments),
+        productCharges: round2(productCharges),
+        remainingPayable: round2(earnings - advances - payments - productCharges),
         lastAdvanceDate: courier.advances[0]?.advanceDate ?? null,
         lastPaymentDate: courier.payments[0]?.paymentDate ?? null,
       };

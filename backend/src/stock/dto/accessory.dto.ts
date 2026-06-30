@@ -112,6 +112,10 @@ export class CreateAccessorySaleDto {
 
   @IsOptional()
   @IsString()
+  buyerCourierId?: string;
+
+  @IsOptional()
+  @IsString()
   note?: string;
 }
 
@@ -149,6 +153,10 @@ export class UpdateAccessorySaleDto {
   @IsOptional()
   @IsString()
   buyer?: string;
+
+  @IsOptional()
+  @IsString()
+  buyerCourierId?: string;
 
   @IsOptional()
   @IsString()

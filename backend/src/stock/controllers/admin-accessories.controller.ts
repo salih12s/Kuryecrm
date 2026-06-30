@@ -34,6 +34,12 @@ export class AdminAccessoriesController {
     return this.service.summary(q);
   }
 
+  // Distinct named products with current stock, for the sale form autocomplete.
+  @Get('products')
+  products() {
+    return this.service.products();
+  }
+
   // ---- Purchases ----
   @Get('purchases')
   listPurchases(@Query() q: AccessoryQueryDto) {
