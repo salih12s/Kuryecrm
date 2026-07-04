@@ -381,7 +381,12 @@ export class ShiftsService {
         restaurantHourlyRateSnapshot: restaurant.hourlyRate,
         courierHourlyRateSnapshot: courier.hourlyRate,
         status: ShiftStatus.PLANNED,
-        confirmationStatus: ShiftConfirmationStatus.WAITING,
+        // Admin sets the shift hours directly, so there is nothing left for the
+        // restaurant or courier to confirm: approve immediately using the
+        // planned times as the source of truth.
+        confirmationStatus: ShiftConfirmationStatus.ADMIN_APPROVED,
+        approvedStartTime: dto.plannedStartTime,
+        approvedEndTime: dto.plannedEndTime,
         note: dto.note || null,
       },
       include: shiftInclude,
@@ -392,8 +397,10 @@ export class ShiftsService {
 
   async adminUpdate(id: string, dto: UpdateShiftDto) {
     const existing = await this.findRaw(id);
-    if (existing.confirmationStatus === ShiftConfirmationStatus.ADMIN_APPROVED) {
-      throw new BadRequestException('Onaylanmış vardiya düzenlenemez; önce iptal süreci uygulanmalıdır.');
+    // Shifts are auto-approved on creation, so a completed/finalized shift is the
+    // only state that must go through the cancel flow instead of a plain edit.
+    if (existing.status === ShiftStatus.COMPLETED) {
+      throw new BadRequestException('Tamamlanmış vardiya düzenlenemez; önce iptal süreci uygulanmalıdır.');
     }
     if (existing.status === ShiftStatus.CANCELLED) {
       throw new BadRequestException('İptal edilmiş vardiya düzenlenemez.');
@@ -423,6 +430,12 @@ export class ShiftsService {
       this.assertTimeOrder(newStart, newEnd, 'Planlanan');
       data.plannedStartTime = newStart;
       data.plannedEndTime = newEnd;
+      // Auto-approved shifts mirror approved times from the planned ones, so
+      // editing the schedule must keep them in sync.
+      if (existing.confirmationStatus === ShiftConfirmationStatus.ADMIN_APPROVED) {
+        data.approvedStartTime = newStart;
+        data.approvedEndTime = newEnd;
+      }
     }
 
     if (dto.extraStartTime !== undefined || dto.extraEndTime !== undefined) {
@@ -451,11 +464,8 @@ export class ShiftsService {
     if (status === ShiftStatus.COMPLETED) {
       throw new BadRequestException('Vardiya yalnızca saat onayı ile tamamlanabilir.');
     }
-    if (
-      existing.confirmationStatus === ShiftConfirmationStatus.ADMIN_APPROVED &&
-      status !== ShiftStatus.CANCELLED
-    ) {
-      throw new BadRequestException('Onaylanmış vardiyada yalnızca iptal işlemi yapılabilir.');
+    if (existing.status === ShiftStatus.COMPLETED && status !== ShiftStatus.CANCELLED) {
+      throw new BadRequestException('Tamamlanmış vardiyada yalnızca iptal işlemi yapılabilir.');
     }
     const updated = await this.prisma.shift.update({
       where: { id },
