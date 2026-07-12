@@ -47,6 +47,12 @@ const STOCK_SECTION: NavSection = {
   ],
 };
 
+// Field-visit log kept by marketers; admin/gözlemci can see every marketer's rows.
+const MARKETING_SECTION: NavSection = {
+  label: 'Pazarlama',
+  items: [{ label: 'Görüşme Kayıtları', to: '/admin/marketing' }],
+};
+
 // Full admin navigation.
 const ADMIN_NAV: NavSection[] = [
   { items: [{ label: 'Genel Bakış', to: '/admin' }] },
@@ -58,6 +64,7 @@ const ADMIN_NAV: NavSection[] = [
   REPORTS_SECTION,
   FINANCE_SECTION,
   STOCK_SECTION,
+  MARKETING_SECTION,
   {
     label: 'Sistem',
     items: [
@@ -73,9 +80,20 @@ const KURYE_SEFI_NAV: NavSection[] = [OPERATION_SECTION];
 // Ortaklar (Partner): finance + financial reports + stock. No operations/map/settings.
 const PARTNER_NAV: NavSection[] = [FINANCE_SECTION, STOCK_SECTION, REPORTS_SECTION];
 
+// Muhasebe: only the restaurant-cari screen (invoices + payments there).
+const MUHASEBE_NAV: NavSection[] = [
+  { items: [{ label: 'Restoran Cari', to: '/admin/restaurant-accounts' }] },
+];
+
+// Gözlemci: restricted admin, sees the exact same navigation as a full admin
+// (every screen is reachable), but every write action is rejected server-side.
+const GOZLEMCI_NAV: NavSection[] = ADMIN_NAV;
+
 function navFor(role?: string): NavSection[] {
   if (role === 'KURYE_SEFI') return KURYE_SEFI_NAV;
   if (role === 'PARTNER') return PARTNER_NAV;
+  if (role === 'MUHASEBE') return MUHASEBE_NAV;
+  if (role === 'GOZLEMCI') return GOZLEMCI_NAV;
   return ADMIN_NAV;
 }
 

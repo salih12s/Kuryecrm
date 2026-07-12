@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { ReadOnlyGuard } from '../auth/guards/read-only.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ShiftsService } from './shifts.service';
 import { CreateShiftDto } from './dto/create-shift.dto';
@@ -12,9 +13,10 @@ import { SwitchRestaurantDto } from './dto/switch-restaurant.dto';
 import { ShiftQueryDto } from './dto/shift-query.dto';
 
 // Operational shift management is available to admins and Kurye Şefi.
+// Gözlemci (restricted admin) gets read-only access via ReadOnlyGuard.
 @Controller('admin/shifts')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN, Role.KURYE_SEFI)
+@UseGuards(JwtAuthGuard, RolesGuard, ReadOnlyGuard)
+@Roles(Role.ADMIN, Role.KURYE_SEFI, Role.GOZLEMCI)
 export class AdminShiftsController {
   constructor(private readonly shifts: ShiftsService) {}
 
@@ -51,5 +53,13 @@ export class AdminShiftsController {
   @Patch(':id/switch-restaurant')
   switchRestaurant(@Param('id') id: string, @Body() dto: SwitchRestaurantDto) {
     return this.shifts.adminSwitchRestaurant(id, dto);
+  }
+
+  // Permanent deletion (for shifts entered by mistake) is admin-only; Kurye
+  // Şefi can only cancel via /:id/status.
+  @Delete(':id')
+  @Roles(Role.ADMIN)
+  remove(@Param('id') id: string) {
+    return this.shifts.adminDelete(id);
   }
 }

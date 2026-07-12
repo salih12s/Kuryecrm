@@ -4,13 +4,15 @@ import { CurrentUser, AuthUser } from '../../auth/decorators/current-user.decora
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
+import { ReadOnlyGuard } from '../../auth/guards/read-only.guard';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { AdminUsersService } from './admin-users.service';
 
+// Gözlemci (restricted admin) can see the user list but never create/edit.
 @Controller('admin/users')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@UseGuards(JwtAuthGuard, RolesGuard, ReadOnlyGuard)
+@Roles(Role.ADMIN, Role.GOZLEMCI)
 export class AdminUsersController {
   constructor(private readonly service: AdminUsersService) {}
 

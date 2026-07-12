@@ -18,6 +18,20 @@ enum Role {
   COURIER
   KURYE_SEFI
   PARTNER
+  // Accountant: sees only the Restoran Cari (restaurant accounts) screen and
+  // can create/edit invoices+payments there to issue weekly invoices.
+  MUHASEBE
+  // Marketer: logs their own field-visit outcomes (positive/negative), sees
+  // only their own entries.
+  PAZARLAMACI
+  // Restricted admin: full read access to everything an admin sees, but every
+  // write endpoint rejects this role (enforced by ReadOnlyGuard/FinanceWriteGuard).
+  GOZLEMCI
+}
+
+enum VisitResult {
+  POSITIVE
+  NEGATIVE
 }
 
 // Approval lifecycle for records created by a Kurye Şefi. Records created by an
@@ -106,6 +120,9 @@ model User {
   // One-to-one relations to role-specific profiles.
   restaurant Restaurant?
   courier    Courier?
+
+  // Field-visit log entries created by this user when role = PAZARLAMACI.
+  marketingVisits MarketingVisit[]
 
   @@map("users")
 }
@@ -454,6 +471,35 @@ model CourierLocation {
   @@index([courierId, createdAt])
   @@index([shiftId])
   @@map("courier_locations")
+}
+
+// ----------------------- Marketing (Pazarlama) -----------------------
+// One field-visit outcome logged by a Pazarlamacı (marketer). Each row belongs
+// to the marketer who created it; marketers only ever see their own rows.
+model MarketingVisit {
+  id        String @id @default(uuid())
+  userId    String
+
+  visitDate String // YYYY-MM-DD, consistent with Shift/finance date storage
+  placeName String // ziyaret edilen işletme/yer adı
+  contactName String?
+  phone       String?
+
+  result         VisitResult
+  // Sonuç POSITIVE ise doldurulur: kaç kişilik operasyon.
+  operationSize  Int?
+  // Sonuç NEGATIVE ise doldurulur: olumsuzluk nedeni.
+  negativeReason String?
+  note           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([visitDate])
+  @@map("marketing_visits")
 }
 
 // Simple key/value application settings (tracking interval, offline threshold,

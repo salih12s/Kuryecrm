@@ -475,6 +475,15 @@ export class ShiftsService {
     return this.serializeAdmin(updated as ShiftWithRefs);
   }
 
+  // Permanent deletion for shifts entered by mistake. Unlike adminSetStatus's
+  // CANCELLED, this removes the row entirely (segments/GPS locations cascade),
+  // so it should not be used for shifts that already fed real accounting.
+  async adminDelete(id: string) {
+    await this.findRaw(id);
+    await this.prisma.shift.delete({ where: { id } });
+    return { ok: true };
+  }
+
   async adminApproveTime(id: string, dto: ApproveTimeDto) {
     const existing = await this.findRaw(id);
     if (existing.status === ShiftStatus.CANCELLED) {

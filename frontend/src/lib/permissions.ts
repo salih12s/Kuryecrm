@@ -8,5 +8,7 @@ import type { User } from '../types';
 export function canEditFinance(user: User | null): boolean {
   if (!user) return false;
   if (user.role === 'PARTNER') return !!user.financeEditable;
+  // Gözlemci is a read-only restricted admin: never allowed to edit.
+  if (user.role === 'GOZLEMCI') return false;
   return true;
 }

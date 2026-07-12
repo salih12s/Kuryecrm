@@ -2,14 +2,16 @@ import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
+import { ReadOnlyGuard } from '../../auth/guards/read-only.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { AdminApprovalsService } from './admin-approvals.service';
 import { ApprovalDecisionDto } from '../dto/approval-decision.dto';
 
-// Approval queue is admin-only. Kurye Şefi cannot self-approve.
+// Approval queue is admin-only (decisions). Kurye Şefi cannot self-approve.
+// Gözlemci (restricted admin) can see the queue but not decide.
 @Controller('admin/approvals')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@UseGuards(JwtAuthGuard, RolesGuard, ReadOnlyGuard)
+@Roles(Role.ADMIN, Role.GOZLEMCI)
 export class AdminApprovalsController {
   constructor(private readonly service: AdminApprovalsService) {}
 

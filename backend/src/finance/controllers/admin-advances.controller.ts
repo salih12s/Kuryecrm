@@ -14,7 +14,7 @@ import {
 
 @Controller('admin/advances')
 @UseGuards(JwtAuthGuard, RolesGuard, FinanceWriteGuard)
-@Roles(Role.ADMIN, Role.PARTNER)
+@Roles(Role.ADMIN, Role.PARTNER, Role.GOZLEMCI)
 export class AdminAdvancesController {
   constructor(private readonly service: AdvancesService) {}
 

@@ -2,14 +2,16 @@ import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { ReadOnlyGuard } from '../auth/guards/read-only.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SettingsService } from './settings.service';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 
-// Application settings are admin-only.
+// Application settings are admin-only to change. Gözlemci (restricted admin)
+// can view them but not update, via ReadOnlyGuard.
 @Controller('admin/settings')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@UseGuards(JwtAuthGuard, RolesGuard, ReadOnlyGuard)
+@Roles(Role.ADMIN, Role.GOZLEMCI)
 export class AdminSettingsController {
   constructor(private readonly settings: SettingsService) {}
 

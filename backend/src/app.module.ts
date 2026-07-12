@@ -11,6 +11,7 @@ import { ReportsModule } from './reports/reports.module';
 import { StockModule } from './stock/stock.module';
 import { SettingsModule } from './settings/settings.module';
 import { TrackingModule } from './tracking/tracking.module';
+import { MarketingModule } from './marketing/marketing.module';
 import { AppController } from './app.controller';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -34,6 +35,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
     ReportsModule,
     StockModule,
     TrackingModule,
+    MarketingModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

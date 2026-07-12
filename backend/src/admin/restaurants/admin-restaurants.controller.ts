@@ -12,6 +12,7 @@ import {
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
+import { ReadOnlyGuard } from '../../auth/guards/read-only.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { CurrentUser, AuthUser } from '../../auth/decorators/current-user.decorator';
 import { AdminRestaurantsService } from './admin-restaurants.service';
@@ -21,9 +22,10 @@ import { ListQueryDto } from '../dto/list-query.dto';
 
 // Restaurants are managed by both admins and Kurye Şefi. Every new record
 // starts pending and requires admin approval before it goes live (in service).
+// Gözlemci (restricted admin) gets read-only access via ReadOnlyGuard.
 @Controller('admin/restaurants')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN, Role.KURYE_SEFI)
+@UseGuards(JwtAuthGuard, RolesGuard, ReadOnlyGuard)
+@Roles(Role.ADMIN, Role.KURYE_SEFI, Role.GOZLEMCI)
 export class AdminRestaurantsController {
   constructor(private readonly service: AdminRestaurantsService) {}
 

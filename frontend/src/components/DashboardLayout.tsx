@@ -28,6 +28,9 @@ const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Yönetici',
   KURYE_SEFI: 'Kurye Şefi',
   PARTNER: 'Ortak',
+  MUHASEBE: 'Muhasebe',
+  PAZARLAMACI: 'Pazarlamacı',
+  GOZLEMCI: 'Gözlemci (Salt Okunur)',
   RESTAURANT: 'Restoran',
   COURIER: 'Kurye',
 };

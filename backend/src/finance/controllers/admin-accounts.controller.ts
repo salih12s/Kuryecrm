@@ -8,7 +8,7 @@ import { AccountingService } from '../accounting.service';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard, FinanceWriteGuard)
-@Roles(Role.ADMIN, Role.PARTNER)
+@Roles(Role.ADMIN, Role.PARTNER, Role.MUHASEBE, Role.GOZLEMCI)
 export class AdminAccountsController {
   constructor(private readonly accounting: AccountingService) {}
 

@@ -25,7 +25,7 @@ import {
 
 @Controller('admin/accessories')
 @UseGuards(JwtAuthGuard, RolesGuard, FinanceWriteGuard)
-@Roles(Role.ADMIN, Role.PARTNER)
+@Roles(Role.ADMIN, Role.PARTNER, Role.GOZLEMCI)
 export class AdminAccessoriesController {
   constructor(private readonly service: AccessoriesService) {}
 

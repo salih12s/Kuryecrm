@@ -169,6 +169,18 @@ export default function ShiftsPage() {
     await changeStatus(s, 'CANCELLED');
   };
 
+  // Permanent deletion, for shifts entered by mistake — distinct from "İptal
+  // Et" above, which only marks the status CANCELLED and keeps the record.
+  const deleteShift = async (s: Shift) => {
+    if (!confirm(`${s.restaurantName} — ${formatDateTR(s.date)} tarihli vardiya kalıcı olarak silinsin mi? Bu işlem geri alınamaz.`)) return;
+    try {
+      await adminShiftsApi.remove(s.id);
+      await load();
+    } catch (err) {
+      alert(extractError(err));
+    }
+  };
+
   const openApprove = (s: Shift) => {
     setApproveTarget(s);
     // Prefill from the parties' reported times so extra overtime is captured.
@@ -346,6 +358,7 @@ export default function ShiftsPage() {
                 <KebabItem onClick={() => changeStatus(s, 'DISPUTED')} disabled={s.status === 'DISPUTED'}>Uyuşmazlık işaretle</KebabItem>
                 <div className="my-1 border-t border-slate-100" />
                 <KebabItem onClick={() => cancelShift(s)} tone="danger" disabled={s.status === 'CANCELLED'}>İptal Et</KebabItem>
+                <KebabItem onClick={() => deleteShift(s)} tone="danger">Kalıcı Sil</KebabItem>
               </KebabMenu>
             </div>
             <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">

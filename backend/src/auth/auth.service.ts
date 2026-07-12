@@ -39,7 +39,7 @@ export class AuthService {
     const accessToken = await this.jwt.signAsync(payload);
 
     const financeEditable =
-      user.role === Role.ADMIN
+      user.role === Role.ADMIN || user.role === Role.MUHASEBE
         ? true
         : user.role === Role.PARTNER
           ? await this.settings.getBool('partners_can_edit_finance')
@@ -77,7 +77,7 @@ export class AuthService {
     // Admins always edit finance; partners only when the setting is enabled.
     // Non-finance roles get false (they don't see finance screens anyway).
     const financeEditable =
-      user.role === Role.ADMIN
+      user.role === Role.ADMIN || user.role === Role.MUHASEBE
         ? true
         : user.role === Role.PARTNER
           ? await this.settings.getBool('partners_can_edit_finance')

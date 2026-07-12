@@ -14,7 +14,7 @@ import {
 
 @Controller('admin/finance-transactions')
 @UseGuards(JwtAuthGuard, RolesGuard, FinanceWriteGuard)
-@Roles(Role.ADMIN, Role.PARTNER)
+@Roles(Role.ADMIN, Role.PARTNER, Role.GOZLEMCI)
 export class AdminFinanceTransactionsController {
   constructor(private readonly service: FinanceTransactionsService) {}
 

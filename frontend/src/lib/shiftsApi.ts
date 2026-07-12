@@ -42,6 +42,10 @@ export const adminShiftsApi = {
     (await api.patch<Shift>(`/admin/shifts/${id}/approve-time`, clean(payload))).data,
   switchRestaurant: async (id: string, payload: { newRestaurantId: string; switchTime: string }) =>
     (await api.patch<Shift>(`/admin/shifts/${id}/switch-restaurant`, payload)).data,
+  // Permanent deletion, for shifts entered by mistake (distinct from status=CANCELLED).
+  remove: async (id: string) => {
+    await api.delete(`/admin/shifts/${id}`);
+  },
 };
 
 // ---------------- Restaurant ----------------

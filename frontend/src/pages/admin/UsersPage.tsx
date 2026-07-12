@@ -11,10 +11,13 @@ const ROLE_LABELS: Record<Role, string> = {
   ADMIN: 'Admin',
   KURYE_SEFI: 'Kurye Şefi',
   PARTNER: 'Ortak / Finans',
+  MUHASEBE: 'Muhasebe',
+  PAZARLAMACI: 'Pazarlamacı',
+  GOZLEMCI: 'Gözlemci (Salt Okunur)',
   RESTAURANT: 'Restoran',
   COURIER: 'Kurye',
 };
-const MANAGEMENT_ROLES: Role[] = ['ADMIN', 'KURYE_SEFI', 'PARTNER'];
+const MANAGEMENT_ROLES: Role[] = ['ADMIN', 'KURYE_SEFI', 'PARTNER', 'MUHASEBE', 'PAZARLAMACI', 'GOZLEMCI'];
 
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
@@ -190,7 +193,7 @@ export default function UsersPage() {
             </select>
           </label>
           <div className="rounded-lg bg-slate-50 p-3 text-xs text-muted">
-            <b>Kurye Şefi:</b> restoran, kurye, vardiya ve canlı harita. <b>Ortak:</b> finans ve raporlar. <b>Admin:</b> tam yetki.
+            <b>Kurye Şefi:</b> restoran, kurye, vardiya ve canlı harita. <b>Ortak:</b> finans ve raporlar. <b>Muhasebe:</b> sadece Restoran Cari (fatura/ödeme). <b>Pazarlamacı:</b> sadece kendi görüşme kayıtları. <b>Gözlemci:</b> her şeyi salt okunur görür, hiçbir şeyi düzenleyemez. <b>Admin:</b> tam yetki.
           </div>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setModalOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">Vazgeç</button>

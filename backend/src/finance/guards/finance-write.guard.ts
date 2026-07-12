@@ -6,11 +6,13 @@ import { SettingsService } from '../../settings/settings.service';
 
 /**
  * Gates write access to finance endpoints. Read (GET) is always allowed for the
- * roles permitted by RolesGuard (admin + partner). For writes:
+ * roles permitted by RolesGuard (admin + partner + muhasebe + gözlemci). For writes:
  *  - ADMIN can always write.
+ *  - MUHASEBE can always write (only reaches the restaurant-cari controllers
+ *    it's granted access to via @Roles — invoices/payments/accounts).
  *  - PARTNER can write only when `partners_can_edit_finance` is enabled.
- *  - Any other role is rejected.
- * Apply at class level together with @Roles(ADMIN, PARTNER).
+ *  - Any other role (incl. GOZLEMCI) is rejected.
+ * Apply at class level together with @Roles(ADMIN, PARTNER, ...).
  */
 @Injectable()
 export class FinanceWriteGuard implements CanActivate {
@@ -21,7 +23,7 @@ export class FinanceWriteGuard implements CanActivate {
     if (request.method === 'GET') return true;
 
     const role = request.user?.role;
-    if (role === Role.ADMIN) return true;
+    if (role === Role.ADMIN || role === Role.MUHASEBE) return true;
 
     if (role === Role.PARTNER) {
       const canEdit = await this.settings.getBool('partners_can_edit_finance');

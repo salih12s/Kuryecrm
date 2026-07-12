@@ -14,7 +14,7 @@ import {
 
 @Controller('admin/restaurant-invoices')
 @UseGuards(JwtAuthGuard, RolesGuard, FinanceWriteGuard)
-@Roles(Role.ADMIN, Role.PARTNER)
+@Roles(Role.ADMIN, Role.PARTNER, Role.MUHASEBE, Role.GOZLEMCI)
 export class AdminInvoicesController {
   constructor(private readonly service: InvoicesService) {}
 

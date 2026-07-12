@@ -23,7 +23,7 @@ import {
 
 @Controller('admin/motorcycles')
 @UseGuards(JwtAuthGuard, RolesGuard, FinanceWriteGuard)
-@Roles(Role.ADMIN, Role.PARTNER)
+@Roles(Role.ADMIN, Role.PARTNER, Role.GOZLEMCI)
 export class AdminMotorcyclesController {
   constructor(private readonly service: MotorcyclesService) {}
 

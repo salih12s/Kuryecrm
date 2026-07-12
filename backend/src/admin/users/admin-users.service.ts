@@ -5,7 +5,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 
-const MANAGEMENT_ROLES: Role[] = [Role.ADMIN, Role.KURYE_SEFI, Role.PARTNER];
+const MANAGEMENT_ROLES: Role[] = [
+  Role.ADMIN,
+  Role.KURYE_SEFI,
+  Role.PARTNER,
+  Role.MUHASEBE,
+  Role.PAZARLAMACI,
+  Role.GOZLEMCI,
+];
 
 @Injectable()
 export class AdminUsersService {

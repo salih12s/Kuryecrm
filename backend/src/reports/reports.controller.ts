@@ -2,14 +2,15 @@ import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { ReadOnlyGuard } from '../auth/guards/read-only.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ReportsService } from './reports.service';
 import { DailyReportQueryDto, RangeReportQueryDto, assertDateRange } from './dto/report-query.dto';
 
-// Financial reports are visible to admins and partners (read-only).
+// Financial reports are visible to admins, partners and gözlemci (read-only).
 @Controller('admin/reports')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN, Role.PARTNER)
+@UseGuards(JwtAuthGuard, RolesGuard, ReadOnlyGuard)
+@Roles(Role.ADMIN, Role.PARTNER, Role.GOZLEMCI)
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 

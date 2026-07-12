@@ -29,6 +29,8 @@ import SettingsPage from './pages/admin/SettingsPage';
 import UsersPage from './pages/admin/UsersPage';
 import MotorcyclesPage from './pages/admin/MotorcyclesPage';
 import AccessoriesPage from './pages/admin/AccessoriesPage';
+import MarketingVisitsPage from './pages/admin/MarketingVisitsPage';
+import PazarlamaPage from './pages/pazarlama/PazarlamaPage';
 
 /** Sends the visitor to their role home, or to /login if signed out. */
 function RootRedirect() {
@@ -52,31 +54,31 @@ export default function App() {
       <Route
         path="/admin"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'GOZLEMCI']}>
             <AdminPage />
           </ProtectedRoute>
         }
       />
       <Route
         path="/admin/reports/daily"
-        element={<ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}><DailyReportPage /></ProtectedRoute>}
+        element={<ProtectedRoute allowedRoles={['ADMIN', 'PARTNER', 'GOZLEMCI']}><DailyReportPage /></ProtectedRoute>}
       />
       <Route
         path="/admin/reports/range"
-        element={<ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}><RangeReportPage /></ProtectedRoute>}
+        element={<ProtectedRoute allowedRoles={['ADMIN', 'PARTNER', 'GOZLEMCI']}><RangeReportPage /></ProtectedRoute>}
       />
       <Route
         path="/admin/reports/restaurants"
-        element={<ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}><RestaurantReportPage /></ProtectedRoute>}
+        element={<ProtectedRoute allowedRoles={['ADMIN', 'PARTNER', 'GOZLEMCI']}><RestaurantReportPage /></ProtectedRoute>}
       />
       <Route
         path="/admin/reports/couriers"
-        element={<ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}><CourierReportPage /></ProtectedRoute>}
+        element={<ProtectedRoute allowedRoles={['ADMIN', 'PARTNER', 'GOZLEMCI']}><CourierReportPage /></ProtectedRoute>}
       />
       <Route
         path="/admin/restaurants"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI', 'GOZLEMCI']}>
             <RestaurantsPage />
           </ProtectedRoute>
         }
@@ -84,7 +86,7 @@ export default function App() {
       <Route
         path="/admin/couriers"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI', 'GOZLEMCI']}>
             <CouriersPage />
           </ProtectedRoute>
         }
@@ -92,7 +94,7 @@ export default function App() {
       <Route
         path="/admin/shifts"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI', 'GOZLEMCI']}>
             <ShiftsPage />
           </ProtectedRoute>
         }
@@ -100,19 +102,19 @@ export default function App() {
       <Route
         path="/admin/approvals"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'GOZLEMCI']}>
             <ApprovalsPage />
           </ProtectedRoute>
         }
       />
       <Route
         path="/admin/courier-payments"
-        element={<ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}><CourierPaymentsPage /></ProtectedRoute>}
+        element={<ProtectedRoute allowedRoles={['ADMIN', 'PARTNER', 'GOZLEMCI']}><CourierPaymentsPage /></ProtectedRoute>}
       />
       <Route
         path="/admin/advances"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER', 'GOZLEMCI']}>
             <AdvancesPage />
           </ProtectedRoute>
         }
@@ -120,7 +122,7 @@ export default function App() {
       <Route
         path="/admin/restaurant-accounts"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER', 'MUHASEBE', 'GOZLEMCI']}>
             <RestaurantAccountsPage />
           </ProtectedRoute>
         }
@@ -128,7 +130,7 @@ export default function App() {
       <Route
         path="/admin/finance-transactions"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER', 'GOZLEMCI']}>
             <FinanceTransactionsPage />
           </ProtectedRoute>
         }
@@ -136,7 +138,7 @@ export default function App() {
       <Route
         path="/admin/stock/motorcycles"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER', 'GOZLEMCI']}>
             <MotorcyclesPage />
           </ProtectedRoute>
         }
@@ -144,15 +146,23 @@ export default function App() {
       <Route
         path="/admin/stock/accessories"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER', 'GOZLEMCI']}>
             <AccessoriesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/marketing"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN', 'GOZLEMCI']}>
+            <MarketingVisitsPage />
           </ProtectedRoute>
         }
       />
       <Route
         path="/admin/couriers/:id/account"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'PARTNER', 'GOZLEMCI']}>
             <CourierAccountAdminPage />
           </ProtectedRoute>
         }
@@ -160,22 +170,30 @@ export default function App() {
       <Route
         path="/admin/live-map"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI', 'GOZLEMCI']}>
             <LiveMapPage />
           </ProtectedRoute>
         }
       />
       <Route
         path="/admin/users"
-        element={<ProtectedRoute allowedRoles={['ADMIN']}><UsersPage /></ProtectedRoute>}
+        element={<ProtectedRoute allowedRoles={['ADMIN', 'GOZLEMCI']}><UsersPage /></ProtectedRoute>}
       />
       <Route
         path="/admin/settings"
-        element={<ProtectedRoute allowedRoles={['ADMIN']}><SettingsPage /></ProtectedRoute>}
+        element={<ProtectedRoute allowedRoles={['ADMIN', 'GOZLEMCI']}><SettingsPage /></ProtectedRoute>}
       />
       <Route
         path="/admin/guide"
-        element={<ProtectedRoute allowedRoles={['ADMIN']}><SystemGuidePage /></ProtectedRoute>}
+        element={<ProtectedRoute allowedRoles={['ADMIN', 'GOZLEMCI']}><SystemGuidePage /></ProtectedRoute>}
+      />
+      <Route
+        path="/pazarlama"
+        element={
+          <ProtectedRoute allowedRoles={['PAZARLAMACI']}>
+            <PazarlamaPage />
+          </ProtectedRoute>
+        }
       />
       <Route
         path="/restaurant"

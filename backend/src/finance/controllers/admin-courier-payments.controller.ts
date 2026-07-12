@@ -14,7 +14,7 @@ import {
 
 @Controller('admin/courier-payments')
 @UseGuards(JwtAuthGuard, RolesGuard, FinanceWriteGuard)
-@Roles(Role.ADMIN, Role.PARTNER)
+@Roles(Role.ADMIN, Role.PARTNER, Role.GOZLEMCI)
 export class AdminCourierPaymentsController {
   constructor(private readonly service: CourierPaymentsService) {}
 

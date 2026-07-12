@@ -1,4 +1,12 @@
-export type Role = 'ADMIN' | 'RESTAURANT' | 'COURIER' | 'KURYE_SEFI' | 'PARTNER';
+export type Role =
+  | 'ADMIN'
+  | 'RESTAURANT'
+  | 'COURIER'
+  | 'KURYE_SEFI'
+  | 'PARTNER'
+  | 'MUHASEBE'
+  | 'PAZARLAMACI'
+  | 'GOZLEMCI';
 
 export type ApprovalStatus = 'APPROVED' | 'PENDING' | 'REJECTED';
 
@@ -40,6 +48,13 @@ export const ROLE_HOME: Record<Role, string> = {
   KURYE_SEFI: '/admin/shifts',
   // Partners only see finance, so they land on a finance screen.
   PARTNER: '/admin/finance-transactions',
+  // Muhasebe only sees the restaurant-cari (accounts/invoices) screen.
+  MUHASEBE: '/admin/restaurant-accounts',
+  // Pazarlamacı has its own single-page panel.
+  PAZARLAMACI: '/pazarlama',
+  // Gözlemci is a restricted admin: sees everything read-only, lands on the
+  // same dashboard as a full admin.
+  GOZLEMCI: '/admin',
   RESTAURANT: '/restaurant',
   COURIER: '/courier',
 };
@@ -568,4 +583,24 @@ export interface LiveMapData {
   generatedAt: string;
   couriers: LiveCourier[];
   restaurants: LiveMapRestaurant[];
+}
+
+// ---------------- Marketing (Pazarlama) ----------------
+
+export type VisitResult = 'POSITIVE' | 'NEGATIVE';
+
+export interface MarketingVisit {
+  id: string;
+  userId: string;
+  marketerName: string;
+  visitDate: string;
+  placeName: string;
+  contactName: string | null;
+  phone: string | null;
+  result: VisitResult;
+  operationSize: number | null;
+  negativeReason: string | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
