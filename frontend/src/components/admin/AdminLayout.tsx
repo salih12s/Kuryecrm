@@ -89,11 +89,16 @@ const MUHASEBE_NAV: NavSection[] = [
 // (every screen is reachable), but every write action is rejected server-side.
 const GOZLEMCI_NAV: NavSection[] = ADMIN_NAV;
 
+// Müdür: operations only, same as Kurye Şefi. Create/edit still land as a
+// pending request an admin must approve (enforced server-side).
+const MUDUR_NAV: NavSection[] = [OPERATION_SECTION];
+
 function navFor(role?: string): NavSection[] {
   if (role === 'KURYE_SEFI') return KURYE_SEFI_NAV;
   if (role === 'PARTNER') return PARTNER_NAV;
   if (role === 'MUHASEBE') return MUHASEBE_NAV;
   if (role === 'GOZLEMCI') return GOZLEMCI_NAV;
+  if (role === 'MUDUR') return MUDUR_NAV;
   return ADMIN_NAV;
 }
 

@@ -27,6 +27,15 @@ enum Role {
   // Restricted admin: full read access to everything an admin sees, but every
   // write endpoint rejects this role (enforced by ReadOnlyGuard/FinanceWriteGuard).
   GOZLEMCI
+  // Manager: may create couriers/restaurants and create/edit shifts, but every
+  // one of those writes lands as a pending request an admin must approve
+  // before it takes effect (enforced in the relevant services/controllers).
+  MUDUR
+}
+
+enum ShiftChangeAction {
+  CREATE
+  UPDATE
 }
 
 enum VisitResult {
@@ -114,6 +123,12 @@ model User {
   passwordHash String
   role         Role
   isActive     Boolean  @default(true)
+
+  // Soft delete: preserves this user's historical records (e.g. a Pazarlamacı's
+  // marketing visits) after an admin "deletes" the account. Username is freed
+  // (suffixed) so it can be reused, same convention as Courier/Restaurant.
+  deletedAt DateTime?
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -123,6 +138,11 @@ model User {
 
   // Field-visit log entries created by this user when role = PAZARLAMACI.
   marketingVisits MarketingVisit[]
+
+  // Shift change requests submitted/reviewed by this user (role = MUDUR
+  // submits, ADMIN reviews).
+  shiftChangeRequestsMade     ShiftChangeRequest[] @relation("ShiftChangeRequestedBy")
+  shiftChangeRequestsReviewed ShiftChangeRequest[] @relation("ShiftChangeReviewedBy")
 
   @@map("users")
 }
@@ -230,11 +250,43 @@ model Shift {
   courier    Courier           @relation(fields: [courierId], references: [id], onDelete: Cascade)
   segments   ShiftSegment[]
   locations  CourierLocation[]
+  changeRequests ShiftChangeRequest[]
 
   @@index([restaurantId])
   @@index([courierId])
   @@index([date])
   @@map("shifts")
+}
+
+// A create/update a Müdür wants to make to a shift. Nothing is applied to the
+// live Shift row until an admin approves it (approve replays the payload
+// through the normal admin create/update logic; reject just records why).
+model ShiftChangeRequest {
+  id      String            @id @default(uuid())
+  action  ShiftChangeAction
+  // Null for CREATE requests (the shift doesn't exist yet); set for UPDATE
+  // requests, and filled in with the new shift's id once a CREATE is approved.
+  shiftId String?
+
+  // Raw CreateShiftDto/UpdateShiftDto, replayed as-is on approval.
+  payload Json
+
+  status ApprovalStatus @default(PENDING)
+  note   String?
+
+  requestedById String
+  reviewedById  String?
+  reviewedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  shift       Shift? @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  requestedBy User   @relation("ShiftChangeRequestedBy", fields: [requestedById], references: [id])
+  reviewedBy  User?  @relation("ShiftChangeReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([status])
+  @@index([shiftId])
+  @@map("shift_change_requests")
 }
 
 // A single shift can be worked across more than one restaurant. Each segment

@@ -9,6 +9,7 @@ import DayTabs from '../../components/admin/DayTabs';
 import { adminTrackingApi } from '../../lib/tracking';
 import { adminShiftsApi, type ShiftFilters } from '../../lib/shiftsApi';
 import { restaurantsApi, couriersApi } from '../../lib/adminApi';
+import { useAuth } from '../../context/AuthContext';
 import { formatDateTR, timeRange } from '../../lib/format';
 import type {
   AdminCourier,
@@ -48,10 +49,13 @@ const emptyForm: ShiftForm = {
 };
 
 export default function ShiftsPage() {
+  const { user } = useAuth();
+  const isMudur = user?.role === 'MUDUR';
   const [rows, setRows] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [restaurants, setRestaurants] = useState<AdminRestaurant[]>([]);
   const [couriers, setCouriers] = useState<AdminCourier[]>([]);
+  const [notice, setNotice] = useState('');
 
   const [filters, setFilters] = useState<ShiftFilters>({});
 
@@ -143,6 +147,9 @@ export default function ShiftsPage() {
         await adminShiftsApi.create(payload);
       }
       setFormOpen(false);
+      // Müdür's create/edit lands as a pending request: the shift list won't
+      // change until an admin approves it, so say so explicitly.
+      if (isMudur) setNotice('Talebiniz admin onayına gönderildi. Onaylanana kadar vardiyaya yansımaz.');
       await load();
     } catch (err) {
       setFormError(extractError(err));
@@ -256,6 +263,10 @@ export default function ShiftsPage() {
         <h1 className="text-2xl font-bold text-primary">Vardiyalar</h1>
         <p className="mt-1 text-sm text-muted">Vardiya oluşturun, saat onaylayın, uyuşmazlıkları yönetin.</p>
       </div>
+
+      {notice && (
+        <div className="mb-4 rounded-lg border border-accent/20 bg-accent/10 p-3 text-sm text-accent">{notice}</div>
+      )}
 
       {/* Filters */}
       <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-card p-4 shadow-sm lg:flex-row lg:flex-wrap lg:items-end">

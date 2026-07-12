@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, ShiftConfirmationStatus, ShiftStatus } from '@prisma/client';
+import { ApprovalStatus, Prisma, ShiftChangeAction, ShiftConfirmationStatus, ShiftStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   durationHours,
@@ -39,6 +39,13 @@ const shiftInclude = {
 } satisfies Prisma.ShiftInclude;
 
 type ShiftWithRefs = Prisma.ShiftGetPayload<{ include: typeof shiftInclude }>;
+
+const changeRequestInclude = {
+  requestedBy: { select: { id: true, name: true, username: true } },
+  shift: { include: shiftInclude },
+} satisfies Prisma.ShiftChangeRequestInclude;
+
+type ShiftChangeRequestWithRefs = Prisma.ShiftChangeRequestGetPayload<{ include: typeof changeRequestInclude }>;
 
 /**
  * A shift is "pending confirmation" when the courier has stamped a clock event
@@ -599,6 +606,154 @@ export class ShiftsService {
     });
 
     return this.serializeAdmin(await this.findRaw(id));
+  }
+
+  // ---------------------------------------------------------------- MÜDÜR (pending change requests)
+
+  private serializeChangeRequest(req: ShiftChangeRequestWithRefs) {
+    return {
+      id: req.id,
+      action: req.action,
+      status: req.status,
+      note: req.note,
+      payload: req.payload,
+      requestedBy: req.requestedBy,
+      shift: req.shift ? this.serializeAdmin(req.shift as ShiftWithRefs) : null,
+      createdAt: req.createdAt,
+      reviewedAt: req.reviewedAt,
+    };
+  }
+
+  /**
+   * Resolves display-friendly names for the approvals list: CREATE payloads
+   * only carry raw restaurantId/courierId, and an UPDATE payload only carries
+   * the fields that changed, so this fills in whatever the payload omits from
+   * the current shift (for UPDATE) or looks the id up (for CREATE).
+   */
+  private async withPreview(req: ReturnType<typeof this.serializeChangeRequest>) {
+    const payload = req.payload as Record<string, unknown>;
+    const restaurantId = (payload.restaurantId as string | undefined) ?? req.shift?.restaurantId;
+    const courierId = (payload.courierId as string | undefined) ?? req.shift?.courierId;
+
+    const [restaurant, courier] = await Promise.all([
+      restaurantId && restaurantId !== req.shift?.restaurantId
+        ? this.prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } })
+        : null,
+      courierId && courierId !== req.shift?.courierId
+        ? this.prisma.courier.findUnique({ where: { id: courierId }, select: { name: true } })
+        : null,
+    ]);
+
+    return {
+      ...req,
+      preview: {
+        restaurantName: restaurant?.name ?? req.shift?.restaurantName ?? null,
+        courierName: courier?.name ?? req.shift?.courierName ?? null,
+        date: (payload.date as string | undefined) ?? req.shift?.date ?? null,
+        plannedStartTime: (payload.plannedStartTime as string | undefined) ?? req.shift?.plannedStartTime ?? null,
+        plannedEndTime: (payload.plannedEndTime as string | undefined) ?? req.shift?.plannedEndTime ?? null,
+      },
+    };
+  }
+
+  /** Müdür asks to create a new shift; nothing is created until an admin approves. */
+  async requestShiftCreate(dto: CreateShiftDto, requestedById: string) {
+    this.assertTimeOrder(dto.plannedStartTime, dto.plannedEndTime, 'Planlanan');
+    this.validateExtraPair(dto.extraStartTime, dto.extraEndTime);
+
+    const [restaurant, courier] = await Promise.all([
+      this.prisma.restaurant.findUnique({ where: { id: dto.restaurantId } }),
+      this.prisma.courier.findUnique({ where: { id: dto.courierId } }),
+    ]);
+    if (!restaurant) throw new NotFoundException('Restoran bulunamadı.');
+    if (!restaurant.isActive) throw new BadRequestException('Pasif restoran vardiyaya atanamaz.');
+    if (!courier) throw new NotFoundException('Kurye bulunamadı.');
+    if (!courier.isActive) throw new BadRequestException('Pasif kurye vardiyaya atanamaz.');
+
+    const request = await this.prisma.shiftChangeRequest.create({
+      data: {
+        action: ShiftChangeAction.CREATE,
+        payload: dto as unknown as Prisma.InputJsonValue,
+        requestedById,
+      },
+      include: changeRequestInclude,
+    });
+    return this.serializeChangeRequest(request);
+  }
+
+  /** Müdür asks to edit an existing shift; the live shift is untouched until approved. */
+  async requestShiftUpdate(id: string, dto: UpdateShiftDto, requestedById: string) {
+    const existing = await this.findRaw(id);
+    if (existing.status === ShiftStatus.COMPLETED) {
+      throw new BadRequestException('Tamamlanmış vardiya düzenlenemez; önce iptal süreci uygulanmalıdır.');
+    }
+    if (existing.status === ShiftStatus.CANCELLED) {
+      throw new BadRequestException('İptal edilmiş vardiya düzenlenemez.');
+    }
+    const newStart = dto.plannedStartTime ?? existing.plannedStartTime;
+    const newEnd = dto.plannedEndTime ?? existing.plannedEndTime;
+    if (dto.plannedStartTime || dto.plannedEndTime) {
+      this.assertTimeOrder(newStart, newEnd, 'Planlanan');
+    }
+
+    const request = await this.prisma.shiftChangeRequest.create({
+      data: {
+        action: ShiftChangeAction.UPDATE,
+        shiftId: id,
+        payload: dto as unknown as Prisma.InputJsonValue,
+        requestedById,
+      },
+      include: changeRequestInclude,
+    });
+    return this.serializeChangeRequest(request);
+  }
+
+  async listPendingChangeRequests() {
+    const requests = await this.prisma.shiftChangeRequest.findMany({
+      where: { status: ApprovalStatus.PENDING },
+      include: changeRequestInclude,
+      orderBy: { createdAt: 'desc' },
+    });
+    return Promise.all(requests.map((r) => this.withPreview(this.serializeChangeRequest(r))));
+  }
+
+  /** Admin decision on a Müdür's shift change request. Approve replays the
+   * stored payload through the normal admin create/update logic; reject just
+   * records why, the live shift (if any) stays untouched either way. */
+  async decideChangeRequest(id: string, action: 'approve' | 'reject', note: string | undefined, reviewedById: string) {
+    const request = await this.prisma.shiftChangeRequest.findUnique({ where: { id } });
+    if (!request) throw new NotFoundException('Vardiya talebi bulunamadı.');
+    if (request.status !== ApprovalStatus.PENDING) {
+      throw new BadRequestException('Bu talep zaten karara bağlanmış.');
+    }
+
+    if (action === 'reject') {
+      await this.prisma.shiftChangeRequest.update({
+        where: { id },
+        data: { status: ApprovalStatus.REJECTED, note: note ?? null, reviewedById, reviewedAt: new Date() },
+      });
+      return this.serializeChangeRequest(
+        await this.prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id }, include: changeRequestInclude }),
+      );
+    }
+
+    let resultShiftId = request.shiftId;
+    if (request.action === ShiftChangeAction.CREATE) {
+      const created = await this.adminCreate(request.payload as unknown as CreateShiftDto);
+      resultShiftId = created.id;
+    } else {
+      if (!request.shiftId) throw new BadRequestException('Talebe bağlı vardiya bulunamadı.');
+      await this.adminUpdate(request.shiftId, request.payload as unknown as UpdateShiftDto);
+    }
+
+    await this.prisma.shiftChangeRequest.update({
+      where: { id },
+      data: { status: ApprovalStatus.APPROVED, shiftId: resultShiftId, reviewedById, reviewedAt: new Date() },
+    });
+
+    return this.serializeChangeRequest(
+      await this.prisma.shiftChangeRequest.findUniqueOrThrow({ where: { id }, include: changeRequestInclude }),
+    );
   }
 
   // ---------------------------------------------------------------- RESTAURANT

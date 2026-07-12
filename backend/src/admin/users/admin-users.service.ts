@@ -12,6 +12,7 @@ const MANAGEMENT_ROLES: Role[] = [
   Role.MUHASEBE,
   Role.PAZARLAMACI,
   Role.GOZLEMCI,
+  Role.MUDUR,
 ];
 
 @Injectable()
@@ -36,8 +37,10 @@ export class AdminUsersService {
 
   async findAll() {
     const users = await this.prisma.user.findMany({
-      // Hide users whose restaurant/courier profile was soft-deleted.
+      // Hide soft-deleted users and users whose restaurant/courier profile
+      // was soft-deleted.
       where: {
+        deletedAt: null,
         AND: [
           { OR: [{ restaurant: { is: null } }, { restaurant: { deletedAt: null } }] },
           { OR: [{ courier: { is: null } }, { courier: { deletedAt: null } }] },
@@ -112,5 +115,36 @@ export class AdminUsersService {
       include: { restaurant: true, courier: true },
     });
     return this.serialize(user);
+  }
+
+  /**
+   * Soft-deletes a management user: it disappears from the list and can no
+   * longer log in, but its historical records (e.g. a Pazarlamacı's marketing
+   * visits) stay in the database. The username is freed so it can be reused,
+   * same convention as courier/restaurant deletion.
+   */
+  async remove(id: string, currentUserId: string) {
+    if (id === currentUserId) {
+      throw new BadRequestException('Kendi hesabınızı silemezsiniz.');
+    }
+    const existing = await this.prisma.user.findUnique({
+      where: { id },
+      include: { restaurant: true, courier: true },
+    });
+    if (!existing || existing.deletedAt) throw new NotFoundException('Kullanıcı bulunamadı.');
+    if (existing.restaurant || existing.courier) {
+      throw new BadRequestException('Restoran ve kurye hesapları kendi sayfalarından silinmelidir.');
+    }
+    if (existing.role === Role.ADMIN) {
+      const activeAdmins = await this.prisma.user.count({ where: { role: Role.ADMIN, isActive: true } });
+      if (activeAdmins <= 1) throw new BadRequestException('Sistemde en az bir aktif admin kalmalıdır.');
+    }
+
+    const freedUsername = `${existing.username}__del_${Date.now()}`;
+    await this.prisma.user.update({
+      where: { id },
+      data: { isActive: false, deletedAt: new Date(), username: freedUsername },
+    });
+    return { id };
   }
 }

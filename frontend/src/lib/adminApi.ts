@@ -71,6 +71,10 @@ export const approvalsApi = {
     const res = await api.patch(`/admin/approvals/restaurants/${id}`, { action, note });
     return res.data;
   },
+  decideShiftChange: async (id: string, action: 'approve' | 'reject', note?: string) => {
+    const res = await api.patch(`/admin/approvals/shift-changes/${id}`, { action, note });
+    return res.data;
+  },
 };
 
 // ---------------- App settings (admin only) ----------------
@@ -89,6 +93,7 @@ export const usersApi = {
     (await api.post<AdminUser>('/admin/users', payload)).data,
   update: async (id: string, payload: Partial<{ name: string; username: string; password: string; role: Role; isActive: boolean }>) =>
     (await api.patch<AdminUser>(`/admin/users/${id}`, clean(payload))).data,
+  remove: async (id: string) => (await api.delete<{ id: string }>(`/admin/users/${id}`)).data,
 };
 
 export const authApi = {

@@ -5,7 +5,7 @@ import { approvalsApi } from '../../lib/adminApi';
 import { formatTL } from '../../lib/format';
 import type { PendingApprovals } from '../../types';
 
-type Kind = 'courier' | 'restaurant';
+type Kind = 'courier' | 'restaurant' | 'shift-change';
 
 export default function ApprovalsPage() {
   const [data, setData] = useState<PendingApprovals | null>(null);
@@ -39,7 +39,8 @@ export default function ApprovalsPage() {
     setBusyId(id);
     try {
       if (kind === 'courier') await approvalsApi.decideCourier(id, action, note);
-      else await approvalsApi.decideRestaurant(id, action, note);
+      else if (kind === 'restaurant') await approvalsApi.decideRestaurant(id, action, note);
+      else await approvalsApi.decideShiftChange(id, action, note);
       await load();
     } catch (err) {
       alert(extractError(err));
@@ -55,7 +56,7 @@ export default function ApprovalsPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-primary">Bekleyen Onaylar</h1>
         <p className="mt-1 text-sm text-muted">
-          Kurye Şefi tarafından oluşturulan kayıtlar onayınıza kadar pasif kalır ve operasyonda kullanılamaz.
+          Kurye Şefi/Müdür tarafından oluşturulan kayıtlar ve Müdür'ün vardiya talepleri onayınıza kadar devreye alınmaz.
         </p>
       </div>
 
@@ -138,6 +139,47 @@ export default function ApprovalsPage() {
               </>
             )}
           </Section>
+
+          {/* Shift change requests (Müdür) */}
+          <Section title={`Bekleyen Vardiya Talepleri (${data!.shiftChangeRequests.length})`}>
+            {data!.shiftChangeRequests.length === 0 ? (
+              <Empty>Bekleyen vardiya talebi yok.</Empty>
+            ) : (
+              <>
+              <div className="space-y-3 md:hidden">
+                {data!.shiftChangeRequests.map((r) => (
+                  <ApprovalCard
+                    key={r.id}
+                    title={`${r.action === 'CREATE' ? 'Yeni Vardiya' : 'Vardiya Düzenleme'} — ${r.preview.restaurantName ?? '—'}`}
+                    subtitle={`${r.requestedBy.name} (@${r.requestedBy.username})`}
+                    rate={null}
+                    rows={[
+                      ['Kurye', r.preview.courierName ?? '—'],
+                      ['Tarih', r.preview.date ?? '—'],
+                      ['Saat', r.preview.plannedStartTime && r.preview.plannedEndTime ? `${r.preview.plannedStartTime} - ${r.preview.plannedEndTime}` : '—'],
+                    ]}
+                    disabled={busyId === r.id}
+                    onApprove={() => decide('shift-change', r.id, 'approve')}
+                    onReject={() => decide('shift-change', r.id, 'reject')}
+                  />
+                ))}
+              </div>
+              <Table headers={['İşlem', 'Talep Eden', 'Restoran', 'Kurye', 'Tarih', 'Saat', '']}>
+                {data!.shiftChangeRequests.map((r) => (
+                  <tr key={r.id} className="border-b border-slate-100 last:border-0">
+                    <td className="px-4 py-3 font-medium text-text">{r.action === 'CREATE' ? 'Yeni Vardiya' : 'Vardiya Düzenleme'}</td>
+                    <td className="px-4 py-3 text-muted">{r.requestedBy.name}</td>
+                    <td className="px-4 py-3 text-muted">{r.preview.restaurantName ?? '—'}</td>
+                    <td className="px-4 py-3 text-muted">{r.preview.courierName ?? '—'}</td>
+                    <td className="px-4 py-3 text-muted">{r.preview.date ?? '—'}</td>
+                    <td className="px-4 py-3 text-muted">{r.preview.plannedStartTime && r.preview.plannedEndTime ? `${r.preview.plannedStartTime} - ${r.preview.plannedEndTime}` : '—'}</td>
+                    <Actions disabled={busyId === r.id} onApprove={() => decide('shift-change', r.id, 'approve')} onReject={() => decide('shift-change', r.id, 'reject')} />
+                  </tr>
+                ))}
+              </Table>
+              </>
+            )}
+          </Section>
         </div>
       )}
     </AdminLayout>
@@ -164,7 +206,7 @@ function ApprovalCard({
 }: {
   title: string;
   subtitle: string;
-  rate: string;
+  rate: string | null;
   rows: [string, string][];
   disabled: boolean;
   onApprove: () => void;
@@ -177,7 +219,7 @@ function ApprovalCard({
           <p className="font-semibold text-text">{title}</p>
           <p className="text-xs text-muted">{subtitle}</p>
         </div>
-        <span className="text-sm font-medium text-text">{formatTL(rate)}</span>
+        {rate !== null && <span className="text-sm font-medium text-text">{formatTL(rate)}</span>}
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
         {rows.map(([k, v]) => (

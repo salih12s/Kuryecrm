@@ -78,7 +78,7 @@ export default function App() {
       <Route
         path="/admin/restaurants"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI', 'GOZLEMCI']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI', 'GOZLEMCI', 'MUDUR']}>
             <RestaurantsPage />
           </ProtectedRoute>
         }
@@ -86,7 +86,7 @@ export default function App() {
       <Route
         path="/admin/couriers"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI', 'GOZLEMCI']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI', 'GOZLEMCI', 'MUDUR']}>
             <CouriersPage />
           </ProtectedRoute>
         }
@@ -94,7 +94,7 @@ export default function App() {
       <Route
         path="/admin/shifts"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI', 'GOZLEMCI']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI', 'GOZLEMCI', 'MUDUR']}>
             <ShiftsPage />
           </ProtectedRoute>
         }
@@ -170,7 +170,7 @@ export default function App() {
       <Route
         path="/admin/live-map"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI', 'GOZLEMCI']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'KURYE_SEFI', 'GOZLEMCI', 'MUDUR']}>
             <LiveMapPage />
           </ProtectedRoute>
         }

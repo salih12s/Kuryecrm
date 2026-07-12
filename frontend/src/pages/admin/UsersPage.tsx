@@ -14,10 +14,11 @@ const ROLE_LABELS: Record<Role, string> = {
   MUHASEBE: 'Muhasebe',
   PAZARLAMACI: 'Pazarlamacı',
   GOZLEMCI: 'Gözlemci (Salt Okunur)',
+  MUDUR: 'Müdür',
   RESTAURANT: 'Restoran',
   COURIER: 'Kurye',
 };
-const MANAGEMENT_ROLES: Role[] = ['ADMIN', 'KURYE_SEFI', 'PARTNER', 'MUHASEBE', 'PAZARLAMACI', 'GOZLEMCI'];
+const MANAGEMENT_ROLES: Role[] = ['ADMIN', 'KURYE_SEFI', 'PARTNER', 'MUHASEBE', 'PAZARLAMACI', 'GOZLEMCI', 'MUDUR'];
 
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
@@ -34,6 +35,9 @@ export default function UsersPage() {
   const [resetPasswordForm, setResetPasswordForm] = useState({ password: '', confirmPassword: '' });
   const [passwordError, setPasswordError] = useState('');
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     try {
@@ -150,6 +154,34 @@ export default function UsersPage() {
     }
   };
 
+  const openDelete = (target: AdminUser) => {
+    setError('');
+    setSuccess('');
+    setDeleteError('');
+    setDeleteTarget(target);
+  };
+
+  const closeDelete = () => {
+    setDeleteTarget(null);
+    setDeleteError('');
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteError('');
+    setDeleting(true);
+    try {
+      await usersApi.remove(deleteTarget.id);
+      setRows((current) => current.filter((item) => item.id !== deleteTarget.id));
+      setSuccess(`${deleteTarget.name} silindi.`);
+      setDeleteTarget(null);
+    } catch (caught) {
+      setDeleteError(messageOf(caught));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const management = rows.filter((item) => !item.profile);
   const restaurants = rows.filter((item) => item.profile?.type === 'restaurant');
   const couriers = rows.filter((item) => item.profile?.type === 'courier');
@@ -175,7 +207,7 @@ export default function UsersPage() {
       {success && <div className="mb-4 rounded-lg border border-success/20 bg-success/10 p-3 text-sm text-success">{success}</div>}
       {loading ? <p className="py-12 text-center text-muted">Kullanıcılar yükleniyor...</p> : (
         <div className="space-y-6">
-          <UserSection title="Yönetim Kullanıcıları" description="Admin, Kurye Şefi ve Ortak hesapları" rows={management} currentUserId={currentUser?.id} onUpdate={update} onResetPassword={openResetPassword} allowRole />
+          <UserSection title="Yönetim Kullanıcıları" description="Admin, Kurye Şefi ve Ortak hesapları" rows={management} currentUserId={currentUser?.id} onUpdate={update} onResetPassword={openResetPassword} onDelete={openDelete} allowRole />
           <UserSection title="Restoran Kullanıcıları" description="Restoranlar sayfasından oluşturulan hesaplar" rows={restaurants} currentUserId={currentUser?.id} onUpdate={update} onResetPassword={openResetPassword} />
           <UserSection title="Kurye Kullanıcıları" description="Kuryeler sayfasından oluşturulan hesaplar" rows={couriers} currentUserId={currentUser?.id} onUpdate={update} onResetPassword={openResetPassword} />
         </div>
@@ -193,7 +225,7 @@ export default function UsersPage() {
             </select>
           </label>
           <div className="rounded-lg bg-slate-50 p-3 text-xs text-muted">
-            <b>Kurye Şefi:</b> restoran, kurye, vardiya ve canlı harita. <b>Ortak:</b> finans ve raporlar. <b>Muhasebe:</b> sadece Restoran Cari (fatura/ödeme). <b>Pazarlamacı:</b> sadece kendi görüşme kayıtları. <b>Gözlemci:</b> her şeyi salt okunur görür, hiçbir şeyi düzenleyemez. <b>Admin:</b> tam yetki.
+            <b>Kurye Şefi:</b> restoran, kurye, vardiya ve canlı harita. <b>Ortak:</b> finans ve raporlar. <b>Muhasebe:</b> sadece Restoran Cari (fatura/ödeme). <b>Pazarlamacı:</b> sadece kendi görüşme kayıtları. <b>Gözlemci:</b> her şeyi salt okunur görür, hiçbir şeyi düzenleyemez. <b>Müdür:</b> yeni restoran/kurye ekleyebilir, vardiya oluşturup düzenleyebilir; hepsi admin onayı bekler. <b>Admin:</b> tam yetki.
           </div>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setModalOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">Vazgeç</button>
@@ -230,17 +262,32 @@ export default function UsersPage() {
           </div>
         </form>
       </Modal>
+
+      <Modal open={!!deleteTarget} title="Kullanıcıyı Sil" onClose={closeDelete}>
+        <div className="space-y-4">
+          {deleteError && <div className="rounded-lg border border-danger/20 bg-danger/10 p-3 text-sm text-danger">{deleteError}</div>}
+          <p className="text-sm text-text">
+            <span className="font-semibold">{deleteTarget?.name}</span>
+            <span className="ml-2 text-muted">@{deleteTarget?.username}</span> kullanıcısını silmek istediğinize emin misiniz? Kullanıcı listeden kaldırılır ve giriş yapamaz; geçmiş kayıtları etkilenmez.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={closeDelete} className="rounded-lg border border-slate-300 px-4 py-2 text-sm">Vazgeç</button>
+            <button onClick={() => void confirmDelete()} disabled={deleting} className="rounded-lg bg-danger px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{deleting ? 'Siliniyor...' : 'Sil'}</button>
+          </div>
+        </div>
+      </Modal>
     </AdminLayout>
   );
 }
 
-function UserSection({ title, description, rows, currentUserId, onUpdate, onResetPassword, allowRole = false }: {
+function UserSection({ title, description, rows, currentUserId, onUpdate, onResetPassword, onDelete, allowRole = false }: {
   title: string;
   description: string;
   rows: AdminUser[];
   currentUserId?: string;
   onUpdate: (user: AdminUser, changes: Partial<{ role: Role; isActive: boolean }>) => Promise<void>;
   onResetPassword: (user: AdminUser) => void;
+  onDelete?: (user: AdminUser) => void;
   allowRole?: boolean;
 }) {
   return (
@@ -268,9 +315,16 @@ function UserSection({ title, description, rows, currentUserId, onUpdate, onRese
                 </select> : <span className="inline-block rounded-full bg-slate-100 px-2 py-1 text-xs text-text">{ROLE_LABELS[item.role]}</span>}
               </div>
               {item.id !== currentUserId && (
-                <button onClick={() => onResetPassword(item)} className="mt-3 w-full rounded-lg border border-accent px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/10">
-                  Şifre Yenile
-                </button>
+                <div className="mt-3 flex gap-2">
+                  <button onClick={() => onResetPassword(item)} className="flex-1 rounded-lg border border-accent px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/10">
+                    Şifre Yenile
+                  </button>
+                  {onDelete && (
+                    <button onClick={() => onDelete(item)} className="flex-1 rounded-lg border border-danger/40 px-3 py-1.5 text-xs font-semibold text-danger hover:bg-danger/10">
+                      Sil
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           ))}
@@ -292,9 +346,16 @@ function UserSection({ title, description, rows, currentUserId, onUpdate, onRese
                 <td className="px-4 py-3"><button disabled={item.id === currentUserId} onClick={() => void onUpdate(item, { isActive: !item.isActive })} className={`rounded-full px-3 py-1 text-xs font-semibold disabled:opacity-50 ${item.isActive ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>{item.isActive ? 'Aktif' : 'Pasif'}</button></td>
                 <td className="px-4 py-3">
                   {item.id !== currentUserId ? (
-                    <button onClick={() => onResetPassword(item)} className="rounded-lg border border-accent px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/10">
-                      Şifre Yenile
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={() => onResetPassword(item)} className="rounded-lg border border-accent px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/10">
+                        Şifre Yenile
+                      </button>
+                      {onDelete && (
+                        <button onClick={() => onDelete(item)} className="rounded-lg border border-danger/40 px-3 py-1.5 text-xs font-semibold text-danger hover:bg-danger/10">
+                          Sil
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     <span className="text-xs text-muted">-</span>
                   )}

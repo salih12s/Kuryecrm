@@ -9,8 +9,10 @@ import { AdminApprovalsController } from './approvals/admin-approvals.controller
 import { AdminApprovalsService } from './approvals/admin-approvals.service';
 import { AdminUsersController } from './users/admin-users.controller';
 import { AdminUsersService } from './users/admin-users.service';
+import { ShiftsModule } from '../shifts/shifts.module';
 
 @Module({
+  imports: [ShiftsModule],
   controllers: [
     AdminController,
     AdminRestaurantsController,

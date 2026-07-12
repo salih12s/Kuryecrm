@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { CurrentUser, AuthUser } from '../../auth/decorators/current-user.decorator';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -29,5 +29,12 @@ export class AdminUsersController {
   @Patch(':id')
   update(@Param('id') id: string, @CurrentUser() user: AuthUser, @Body() dto: UpdateUserDto) {
     return this.service.update(id, dto, user.userId);
+  }
+
+  // Deletion is admin-only; Gözlemci gets blocked by ReadOnlyGuard anyway.
+  @Delete(':id')
+  @Roles(Role.ADMIN)
+  remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.remove(id, user.userId);
   }
 }

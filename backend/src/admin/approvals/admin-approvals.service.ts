@@ -2,18 +2,23 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { ApprovalStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ApprovalDecisionDto } from '../dto/approval-decision.dto';
+import { ShiftsService } from '../../shifts/shifts.service';
 
 /**
  * Admin-only review queue for courier/restaurant records created by a Kurye
- * Şefi. Pending records are inactive until approved; rejecting keeps them
- * inactive and records the reason.
+ * Şefi/Müdür, and shift create/edit requests submitted by a Müdür. Pending
+ * records/requests are inactive/unapplied until approved; rejecting records
+ * the reason and leaves them that way.
  */
 @Injectable()
 export class AdminApprovalsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly shifts: ShiftsService,
+  ) {}
 
   async listPending() {
-    const [couriers, restaurants] = await Promise.all([
+    const [couriers, restaurants, shiftChangeRequests] = await Promise.all([
       this.prisma.courier.findMany({
         where: { approvalStatus: ApprovalStatus.PENDING },
         include: { user: { select: { username: true } } },
@@ -24,6 +29,7 @@ export class AdminApprovalsService {
         include: { user: { select: { username: true } } },
         orderBy: { createdAt: 'desc' },
       }),
+      this.shifts.listPendingChangeRequests(),
     ]);
 
     return {
@@ -45,8 +51,13 @@ export class AdminApprovalsService {
         hourlyRate: r.hourlyRate.toString(),
         createdAt: r.createdAt,
       })),
-      totalPending: couriers.length + restaurants.length,
+      shiftChangeRequests,
+      totalPending: couriers.length + restaurants.length + shiftChangeRequests.length,
     };
+  }
+
+  decideShiftChange(id: string, dto: ApprovalDecisionDto, reviewedById: string) {
+    return this.shifts.decideChangeRequest(id, dto.action, dto.note, reviewedById);
   }
 
   async decideCourier(id: string, dto: ApprovalDecisionDto) {

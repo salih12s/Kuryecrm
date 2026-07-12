@@ -7,5 +7,6 @@ import { CourierShiftsController } from './courier-shifts.controller';
 @Module({
   controllers: [AdminShiftsController, RestaurantShiftsController, CourierShiftsController],
   providers: [ShiftsService],
+  exports: [ShiftsService],
 })
 export class ShiftsModule {}

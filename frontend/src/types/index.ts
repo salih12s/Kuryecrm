@@ -6,7 +6,8 @@ export type Role =
   | 'PARTNER'
   | 'MUHASEBE'
   | 'PAZARLAMACI'
-  | 'GOZLEMCI';
+  | 'GOZLEMCI'
+  | 'MUDUR';
 
 export type ApprovalStatus = 'APPROVED' | 'PENDING' | 'REJECTED';
 
@@ -55,6 +56,9 @@ export const ROLE_HOME: Record<Role, string> = {
   // Gözlemci is a restricted admin: sees everything read-only, lands on the
   // same dashboard as a full admin.
   GOZLEMCI: '/admin',
+  // Müdür shares the admin panel but only sees operations, so it lands on
+  // shifts like Kurye Şefi.
+  MUDUR: '/admin/shifts',
   RESTAURANT: '/restaurant',
   COURIER: '/courier',
 };
@@ -95,7 +99,32 @@ export interface AdminCourier {
   updatedAt: string;
 }
 
-/** Pending approval queue (records created by a Kurye Şefi). */
+export type ShiftChangeAction = 'CREATE' | 'UPDATE';
+
+/** A Müdür's pending request to create or edit a shift, awaiting admin decision. */
+export interface ShiftChangeRequest {
+  id: string;
+  action: ShiftChangeAction;
+  status: ApprovalStatus;
+  note: string | null;
+  /** Raw CreateShiftDto/UpdateShiftDto fields the requester submitted. */
+  payload: Record<string, unknown>;
+  requestedBy: { id: string; name: string; username: string };
+  /** Present for UPDATE requests (the shift being edited); null for CREATE. */
+  shift: Shift | null;
+  /** Display-friendly resolved names/date/times: payload overrides merged onto the current shift (or looked up, for CREATE). */
+  preview: {
+    restaurantName: string | null;
+    courierName: string | null;
+    date: string | null;
+    plannedStartTime: string | null;
+    plannedEndTime: string | null;
+  };
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
+/** Pending approval queue (records created by a Kurye Şefi/Müdür, and shift requests from a Müdür). */
 export interface PendingApprovals {
   couriers: {
     id: string; name: string; phone: string; plate: string | null;
@@ -105,6 +134,7 @@ export interface PendingApprovals {
     id: string; name: string; authorizedPerson: string; phone: string;
     username: string; hourlyRate: string; createdAt: string;
   }[];
+  shiftChangeRequests: ShiftChangeRequest[];
   totalPending: number;
 }
 

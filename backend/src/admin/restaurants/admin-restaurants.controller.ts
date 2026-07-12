@@ -22,10 +22,12 @@ import { ListQueryDto } from '../dto/list-query.dto';
 
 // Restaurants are managed by both admins and Kurye Şefi. Every new record
 // starts pending and requires admin approval before it goes live (in service).
-// Gözlemci (restricted admin) gets read-only access via ReadOnlyGuard.
+// Gözlemci (restricted admin) gets read-only access via ReadOnlyGuard. Müdür
+// may only view and create (also lands pending, same as everyone else) — not
+// edit an existing restaurant, so that route stays out of the class-level list.
 @Controller('admin/restaurants')
 @UseGuards(JwtAuthGuard, RolesGuard, ReadOnlyGuard)
-@Roles(Role.ADMIN, Role.KURYE_SEFI, Role.GOZLEMCI)
+@Roles(Role.ADMIN, Role.KURYE_SEFI, Role.GOZLEMCI, Role.MUDUR)
 export class AdminRestaurantsController {
   constructor(private readonly service: AdminRestaurantsService) {}
 
@@ -45,6 +47,7 @@ export class AdminRestaurantsController {
   }
 
   @Patch(':id')
+  @Roles(Role.ADMIN, Role.KURYE_SEFI, Role.GOZLEMCI)
   update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateRestaurantDto) {
     return this.service.update(id, dto, user.role as Role);
   }
