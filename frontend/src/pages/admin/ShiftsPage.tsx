@@ -3,7 +3,7 @@ import axios from 'axios';
 import AdminLayout from '../../components/admin/AdminLayout';
 import Modal from '../../components/Modal';
 import Field from '../../components/admin/Field';
-import { ShiftStatusBadge, ConfirmationBadge } from '../../components/admin/ShiftBadges';
+import { ShiftStatusBadge, ConfirmationBadge, CourierAckBadge } from '../../components/admin/ShiftBadges';
 import KebabMenu, { KebabItem } from '../../components/admin/KebabMenu';
 import DayTabs from '../../components/admin/DayTabs';
 import { adminTrackingApi } from '../../lib/tracking';
@@ -383,6 +383,7 @@ export default function ShiftsPage() {
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <ShiftStatusBadge status={s.status} />
               <ConfirmationBadge status={s.confirmationStatus} />
+              <CourierAckBadge acknowledged={s.courierAcknowledged} />
               <LateOvertimeCell shift={s} />
             </div>
           </div>
@@ -405,14 +406,15 @@ export default function ShiftsPage() {
                 <th className="px-2.5 py-2 font-medium">Geç / Mesai</th>
                 <th className="px-2.5 py-2 font-medium">Durum</th>
                 <th className="px-2.5 py-2 font-medium">Saat Kontrol</th>
+                <th className="px-2.5 py-2 font-medium">Kurye Onayı</th>
                 <th className="px-2.5 py-2 text-right font-medium">İşlemler</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={11} className="px-4 py-8 text-center text-muted">Yükleniyor...</td></tr>
+                <tr><td colSpan={12} className="px-4 py-8 text-center text-muted">Yükleniyor...</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={11} className="px-4 py-8 text-center text-muted">Vardiya bulunamadı.</td></tr>
+                <tr><td colSpan={12} className="px-4 py-8 text-center text-muted">Vardiya bulunamadı.</td></tr>
               ) : (
                 rows.map((s) => (
                   <tr key={s.id} className="border-b border-slate-100 last:border-0 align-top">
@@ -445,6 +447,7 @@ export default function ShiftsPage() {
                     <td className="px-2.5 py-2"><LateOvertimeCell shift={s} /></td>
                     <td className="px-2.5 py-2"><ShiftStatusBadge status={s.status} /></td>
                     <td className="px-2.5 py-2"><ConfirmationBadge status={s.confirmationStatus} /></td>
+                    <td className="px-2.5 py-2"><CourierAckBadge acknowledged={s.courierAcknowledged} /></td>
                     <td className="px-2.5 py-2 text-right">
                       <KebabMenu>
                         <KebabItem onClick={() => openApprove(s)} tone="success">Saat Onayla</KebabItem>
@@ -599,11 +602,12 @@ function currentRestaurantName(s: Shift): string {
   return open ? open.restaurantName : s.restaurantName;
 }
 
-/** Late-start and overtime badges derived from the shift's planned vs actual times. */
+/** Late-start, overtime and late-acknowledgment badges derived from the shift's planned vs actual times. */
 function LateOvertimeCell({ shift }: { shift: Shift }) {
   const hasLate = shift.isLate && shift.lateMinutes > 0;
   const hasOvertime = (shift.overtimeHours ?? 0) > 0;
-  if (!hasLate && !hasOvertime) return <span className="text-muted">—</span>;
+  const hasAckLate = shift.courierAcknowledged && shift.isAckLate;
+  if (!hasLate && !hasOvertime && !hasAckLate) return <span className="text-muted">—</span>;
   return (
     <div className="flex flex-col gap-1">
       {hasLate && (
@@ -614,6 +618,11 @@ function LateOvertimeCell({ shift }: { shift: Shift }) {
       {hasOvertime && (
         <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-center text-[11px] font-medium text-indigo-700">
           {shift.overtimeHours} sa ek mesai
+        </span>
+      )}
+      {hasAckLate && (
+        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-center text-[11px] font-medium text-amber-700">
+          {shift.ackLateMinutes} dk geç onayladı
         </span>
       )}
     </div>

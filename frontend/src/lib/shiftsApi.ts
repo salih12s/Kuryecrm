@@ -79,4 +79,10 @@ export const courierShiftsApi = {
     (await api.patch<PartyShift>(`/courier/shifts/${id}/report-time`, { reportedEndTime: nowHHmm() })).data,
   waitingCount: async () =>
     (await api.get<{ count: number }>('/courier/shifts/waiting-count')).data.count,
+  // Stamps the courier's local tap time when acknowledging (used only to flag a late ack).
+  setAcknowledged: async (id: string, acknowledged: boolean) =>
+    (await api.patch<PartyShift>(`/courier/shifts/${id}/acknowledge`, {
+      acknowledged,
+      ...(acknowledged ? { ackTime: nowHHmm() } : {}),
+    })).data,
 };

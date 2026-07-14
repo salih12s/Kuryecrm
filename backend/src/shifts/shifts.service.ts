@@ -18,6 +18,7 @@ import { UpdateShiftDto } from './dto/update-shift.dto';
 import { ApproveTimeDto } from './dto/approve-time.dto';
 import { ReportTimeDto } from './dto/report-time.dto';
 import { ConfirmTimeDto } from './dto/confirm-time.dto';
+import { SetAcknowledgedDto } from './dto/set-acknowledged.dto';
 import { SwitchRestaurantDto } from './dto/switch-restaurant.dto';
 import { PartyShiftQueryDto, ShiftQueryDto } from './dto/shift-query.dto';
 
@@ -159,6 +160,20 @@ export class ShiftsService {
   }
 
   /**
+   * Informational-only: how late the courier's acknowledgment tap was versus
+   * the planned start. Never affects worked hours/accounting, unlike
+   * deriveTimes' lateMinutes (which reflects actual work start).
+   */
+  private deriveAckLateness(shift: {
+    plannedStartTime: string;
+    courierAcknowledged: boolean;
+    courierAckTime: string | null;
+  }) {
+    const late = shift.courierAcknowledged ? lateMinutes(shift.plannedStartTime, shift.courierAckTime) : 0;
+    return { ackLateMinutes: late, isAckLate: late > 0 };
+  }
+
+  /**
    * Real-time clock-in/out phase derived purely from the reported time fields.
    * Couriers stamp their own start/end live; the restaurant only confirms. So the
    * party that still owes an action in a *_PENDING_CONFIRM phase is always the
@@ -279,9 +294,12 @@ export class ShiftsService {
       approvedEndTime: shift.approvedEndTime,
       ...derived,
       ...this.deriveClockPhase(shift),
+      ...this.deriveAckLateness(shift),
       segments: this.serializeSegments(shift),
       status: shift.status,
       confirmationStatus: shift.confirmationStatus,
+      courierAcknowledged: shift.courierAcknowledged,
+      courierAckTime: shift.courierAckTime,
       note: shift.note,
       adminNote: shift.adminNote,
       calculation,
@@ -891,6 +909,29 @@ export class ShiftsService {
       throw new ForbiddenException('Bu vardiyaya erişim yetkiniz yok.');
     }
     return this.applyReport(shift, 'courier', dto);
+  }
+
+  /**
+   * Courier's own informational plan acknowledgment. Purely a self-service
+   * flag: it never touches planned/approved times or confirmationStatus, and
+   * is freely reversible so an accidental tap can be undone.
+   */
+  async courierSetAcknowledged(userId: string, id: string, dto: SetAcknowledgedDto) {
+    const courierId = await this.courierIdForUser(userId);
+    const shift = await this.findRaw(id);
+    if (shift.courierId !== courierId) {
+      throw new ForbiddenException('Bu vardiyaya erişim yetkiniz yok.');
+    }
+    const updated = await this.prisma.shift.update({
+      where: { id },
+      data: {
+        courierAcknowledged: dto.acknowledged,
+        // Cleared on un-acknowledge so a later re-tap always reflects its own time.
+        courierAckTime: dto.acknowledged ? (dto.ackTime ?? null) : null,
+      },
+      include: shiftInclude,
+    });
+    return this.serializeParty(updated as ShiftWithRefs, 'courier');
   }
 
   // ---------------------------------------------------------------- shared report

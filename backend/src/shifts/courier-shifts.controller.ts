@@ -6,6 +6,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser, AuthUser } from '../auth/decorators/current-user.decorator';
 import { ShiftsService } from './shifts.service';
 import { ReportTimeDto } from './dto/report-time.dto';
+import { SetAcknowledgedDto } from './dto/set-acknowledged.dto';
 import { PartyShiftQueryDto } from './dto/shift-query.dto';
 
 @Controller('courier/shifts')
@@ -37,5 +38,14 @@ export class CourierShiftsController {
     @Body() dto: ReportTimeDto,
   ) {
     return this.shifts.courierReportTime(user.userId, id, dto);
+  }
+
+  @Patch(':id/acknowledge')
+  setAcknowledged(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: SetAcknowledgedDto,
+  ) {
+    return this.shifts.courierSetAcknowledged(user.userId, id, dto);
   }
 }

@@ -5,6 +5,7 @@ import Field from '../admin/Field';
 import {
   ShiftStatusBadge,
   ClockPhaseBadge,
+  CourierAckBadge,
   getConfirmationStatusLabel,
 } from '../admin/ShiftBadges';
 import { formatDateTR, timeRange } from '../../lib/format';
@@ -20,6 +21,8 @@ interface Props {
   /** Live clock-in/out, provided for the courier perspective. */
   clockIn?: (id: string) => Promise<PartyShift>;
   clockOut?: (id: string) => Promise<PartyShift>;
+  /** Courier's own plan-acknowledgment toggle, provided for the courier perspective. */
+  acknowledge?: (id: string, acknowledged: boolean) => Promise<PartyShift>;
 }
 
 /** Self-service shift list with live clock-in/out + manual time correction. */
@@ -31,10 +34,12 @@ export default function PartyShiftsView({
   report,
   clockIn,
   clockOut,
+  acknowledge,
 }: Props) {
   const [rows, setRows] = useState<PartyShift[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [ackBusyId, setAckBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const [open, setOpen] = useState(false);
@@ -44,6 +49,7 @@ export default function PartyShiftsView({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const showAck = perspective === 'courier' && !!acknowledge;
   const otherHeader = perspective === 'restaurant' ? 'Kurye' : 'Restoran';
   const otherName = (s: PartyShift) => (perspective === 'restaurant' ? s.courierName : s.restaurantName);
   const myStart = (s: PartyShift) =>
@@ -77,6 +83,20 @@ export default function PartyShiftsView({
       setActionError(extractError(err));
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const toggleAcknowledge = async (s: PartyShift) => {
+    if (!acknowledge) return;
+    setAckBusyId(s.id);
+    setActionError(null);
+    try {
+      const updated = await acknowledge(s.id, !s.courierAcknowledged);
+      setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    } catch (err) {
+      setActionError(extractError(err));
+    } finally {
+      setAckBusyId(null);
     }
   };
 
@@ -202,6 +222,17 @@ export default function PartyShiftsView({
                 </dd>
                 <dt className="text-muted">Durum</dt>
                 <dd className="text-right"><ShiftStatusBadge status={s.status} /></dd>
+                {showAck && (
+                  <>
+                    <dt className="text-muted">Plan Onayı</dt>
+                    <dd className="text-right">
+                      <CourierAckBadge
+                        acknowledged={s.courierAcknowledged}
+                        onClick={ackBusyId === s.id ? undefined : () => toggleAcknowledge(s)}
+                      />
+                    </dd>
+                  </>
+                )}
               </dl>
               <div className="mt-3">{renderActions(s)}</div>
             </div>
@@ -222,14 +253,15 @@ export default function PartyShiftsView({
                 <th className="whitespace-nowrap px-4 py-3 font-medium">Onaylı Saat</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">Mesai Durumu</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">Durum</th>
+                {showAck && <th className="whitespace-nowrap px-4 py-3 font-medium">Plan Onayı</th>}
                 <th className="whitespace-nowrap px-4 py-3 text-right font-medium">İşlemler</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-muted">Yükleniyor...</td></tr>
+                <tr><td colSpan={showAck ? 9 : 8} className="px-4 py-8 text-center text-muted">Yükleniyor...</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-muted">Vardiya bulunamadı.</td></tr>
+                <tr><td colSpan={showAck ? 9 : 8} className="px-4 py-8 text-center text-muted">Vardiya bulunamadı.</td></tr>
               ) : (
                 rows.map((s) => (
                   <tr key={s.id} className="border-b border-slate-100 last:border-0 align-top">
@@ -263,6 +295,14 @@ export default function PartyShiftsView({
                     </td>
                     <td className="px-4 py-3"><ClockPhaseBadge phase={s.clockPhase} /></td>
                     <td className="px-4 py-3"><ShiftStatusBadge status={s.status} /></td>
+                    {showAck && (
+                      <td className="px-4 py-3">
+                        <CourierAckBadge
+                          acknowledged={s.courierAcknowledged}
+                          onClick={ackBusyId === s.id ? undefined : () => toggleAcknowledge(s)}
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-right">{renderActions(s)}</td>
                   </tr>
                 ))

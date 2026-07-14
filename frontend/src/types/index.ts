@@ -383,6 +383,13 @@ export interface Shift extends ShiftDerived {
   segments: ShiftSegment[];
   status: ShiftStatus;
   confirmationStatus: ShiftConfirmationStatus;
+  /** Courier's own informational plan acknowledgment; independent of confirmationStatus. */
+  courierAcknowledged: boolean;
+  /** "HH:mm" the courier tapped acknowledge; null when not acknowledged. */
+  courierAckTime: string | null;
+  /** Informational only: how late the acknowledge tap was vs. plannedStartTime. */
+  ackLateMinutes: number;
+  isAckLate: boolean;
   note: string | null;
   adminNote: string | null;
   calculation: ShiftCalculation | null;

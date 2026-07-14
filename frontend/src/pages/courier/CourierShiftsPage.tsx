@@ -13,6 +13,7 @@ export default function CourierShiftsPage() {
         report={(id, payload) => courierShiftsApi.reportTime(id, payload)}
         clockIn={(id) => courierShiftsApi.clockIn(id)}
         clockOut={(id) => courierShiftsApi.clockOut(id)}
+        acknowledge={(id, acknowledged) => courierShiftsApi.setAcknowledged(id, acknowledged)}
       />
     </CourierLayout>
   );

@@ -5,7 +5,12 @@
       "Read(//c/Users/salih/Desktop/frontend/**)",
       "Bash(echo \"TSC DONE exit=$?\")",
       "Bash(echo \"EXIT=$?\")",
-      "Bash(echo \"TSC EXIT=$?\")"
+      "Bash(echo \"TSC EXIT=$?\")",
+      "Bash(node \"/c/Users/salih/AppData/Local/Temp/claude/c--Users-salih-Desktop-KuryeCrm/3b7bc8fc-06ca-4d91-955e-7d5fe7584075/scratchpad/inspect.js\")",
+      "Bash(node _tmp_inspect.js)",
+      "Bash(node _tmp_reset.js)",
+      "Bash(node -e ' *)",
+      "Bash(npm run *)"
     ]
   }
 }

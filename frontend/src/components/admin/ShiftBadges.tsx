@@ -54,3 +54,33 @@ export function ConfirmationBadge({ status }: { status: ShiftConfirmationStatus 
   const s = CONFIRMATION_STYLE[status];
   return <span className={`${base} ${s.cls}`}>{s.label}</span>;
 }
+
+/**
+ * Courier's own informational plan acknowledgment. Purely a display of
+ * `courierAcknowledged`; independent of ShiftConfirmationStatus/ADMIN_APPROVED.
+ * Pass `onClick` to render it as a toggle button (courier's own panel);
+ * omit it for a read-only badge (admin panel).
+ */
+export function CourierAckBadge({
+  acknowledged,
+  onClick,
+}: {
+  acknowledged: boolean;
+  onClick?: () => void;
+}) {
+  const cls = acknowledged ? 'bg-success/10 text-success' : 'bg-slate-100 text-slate-600';
+  const label = acknowledged ? 'Onayladı' : 'Onaylamadı';
+  if (!onClick) {
+    return <span className={`${base} ${cls}`}>{label}</span>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Değiştirmek için tıklayın"
+      className={`${base} ${cls} cursor-pointer hover:opacity-80`}
+    >
+      {label}
+    </button>
+  );
+}

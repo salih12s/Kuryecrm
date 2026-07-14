@@ -240,6 +240,16 @@ model Shift {
   status             ShiftStatus             @default(PLANNED)
   confirmationStatus ShiftConfirmationStatus @default(WAITING)
 
+  // Courier's own informational acknowledgment of the plan, shown on their
+  // "Vardiyalarım" screen. Independent of confirmationStatus/ADMIN_APPROVED:
+  // toggling it never changes planned/approved times. Freely reversible so
+  // an accidental tap can be undone.
+  courierAcknowledged Boolean @default(false)
+  // "HH:mm" local time the courier tapped the acknowledge button. Cleared
+  // whenever courierAcknowledged is toggled back off. Used only to derive an
+  // informational "acknowledged late" flag; never affects worked hours.
+  courierAckTime      String?
+
   note      String?
   adminNote String?
 
