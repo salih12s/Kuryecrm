@@ -459,6 +459,7 @@ export default function ShiftsPage() {
                         <KebabItem onClick={() => changeStatus(s, 'DISPUTED')} disabled={s.status === 'DISPUTED'}>Uyuşmazlık işaretle</KebabItem>
                         <div className="my-1 border-t border-slate-100" />
                         <KebabItem onClick={() => cancelShift(s)} tone="danger" disabled={s.status === 'CANCELLED'}>İptal Et</KebabItem>
+                        <KebabItem onClick={() => deleteShift(s)} tone="danger">Kalıcı Sil</KebabItem>
                       </KebabMenu>
                     </td>
                   </tr>

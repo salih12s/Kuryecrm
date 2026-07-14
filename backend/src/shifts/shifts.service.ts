@@ -888,6 +888,24 @@ export class ShiftsService {
     return this.serializeParty(shift, 'courier');
   }
 
+  /**
+   * Newly planned shifts the courier hasn't acknowledged yet, oldest first —
+   * feeds the "do you confirm this shift?" modal shown on login.
+   */
+  async courierPendingAcknowledgment(userId: string) {
+    const courierId = await this.courierIdForUser(userId);
+    const shifts = await this.prisma.shift.findMany({
+      where: {
+        courierId,
+        status: ShiftStatus.PLANNED,
+        courierAcknowledged: false,
+      },
+      include: shiftInclude,
+      orderBy: [{ date: 'asc' }, { plannedStartTime: 'asc' }],
+    });
+    return (shifts as ShiftWithRefs[]).map((s) => this.serializeParty(s, 'courier'));
+  }
+
   /** Count of this courier's shifts whose clock event is awaiting restaurant confirmation. */
   async courierWaitingCount(userId: string): Promise<{ count: number }> {
     const courierId = await this.courierIdForUser(userId);

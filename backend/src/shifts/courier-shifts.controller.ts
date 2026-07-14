@@ -21,6 +21,11 @@ export class CourierShiftsController {
     return this.shifts.courierWaitingCount(user.userId);
   }
 
+  @Get('pending-ack')
+  pendingAcknowledgment(@CurrentUser() user: AuthUser) {
+    return this.shifts.courierPendingAcknowledgment(user.userId);
+  }
+
   @Get()
   findAll(@CurrentUser() user: AuthUser, @Query() query: PartyShiftQueryDto) {
     return this.shifts.courierFindAll(user.userId, query);

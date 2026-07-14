@@ -79,6 +79,9 @@ export const courierShiftsApi = {
     (await api.patch<PartyShift>(`/courier/shifts/${id}/report-time`, { reportedEndTime: nowHHmm() })).data,
   waitingCount: async () =>
     (await api.get<{ count: number }>('/courier/shifts/waiting-count')).data.count,
+  // Newly planned shifts still awaiting the courier's acknowledgment (feeds the confirm modal).
+  pendingAcknowledgment: async () =>
+    (await api.get<PartyShift[]>('/courier/shifts/pending-ack')).data,
   // Stamps the courier's local tap time when acknowledging (used only to flag a late ack).
   setAcknowledged: async (id: string, acknowledged: boolean) =>
     (await api.patch<PartyShift>(`/courier/shifts/${id}/acknowledge`, {
